@@ -5,14 +5,13 @@
 #### v0.1 Begun 19 September 2004
 #### v0.2 21 December 2008
 ####
-#### Performs mostly-dumb extraction or semi-intelligent compaction of
-#### LucasArts games' resource files.
+#### Performs extraction or compaction of LucasArts games' resource files.
 ####
 #### Extraction stores ID based on offset tables in RESOURCE.000
 #### Compaction merges dumped files, generating headers and file sizes
 #### automatically, and generates offset tables for RESOURCE.000
 ####
-#### Currently works for Monkey Island 1 and 2, and untested Fate of Atlantis.
+#### Currently works for Monkey Island 1 and 2 and IJ: Fate of Atlantis.
 ####
 ##################################################################
 #### TODO:
@@ -21,7 +20,7 @@
 #### Modify chunks that store how many items they hold (needed for
 #### RMIM\RMIH (z-planes), OBIM\IMHD (images and z-planes per image),
 #### RMHD (height/width?). Currently supports generating number of objects
-#### for RMHDs.
+#### for RMHDs, and number of local scripts for NLSCs.
 ####
 #### Have an option for merged dumping - eg dump images as a single file
 #### rather than RMIM\IMG01 etc
