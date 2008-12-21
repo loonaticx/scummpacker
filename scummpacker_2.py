@@ -19,13 +19,18 @@
 #### Make try/catches around all file operations and make them better
 ####
 #### Modify chunks that store how many items they hold (needed for
-#### RMIM\RMIH (z-buffers), OBIM\IMHD (images and z-buffers per image),
-#### RMHD (number of objects, height/width?)
+#### RMIM\RMIH (z-planes), OBIM\IMHD (images and z-planes per image),
+#### RMHD (height/width?). Currently supports generating number of objects
+#### for RMHDs.
 ####
 #### Have an option for merged dumping - eg dump images as a single file
 #### rather than RMIM\IMG01 etc
 ####
 #### Relax file name restrictions by using regular expressions
+####
+#### Perhaps directory structure could be less literal - could have a "room"
+#### dir, which contains dirs for "scripts", "objects", etc, and packing could
+#### translate that into proper structure, order etc.
 ####
 ##################################################################
 import os
@@ -72,6 +77,7 @@ specialtypes = {"COST":dcos, "CHAR":dchr, "SCRP":dscr,
                 "SOUN":dsou, "ROOM":droo, "LOFF":droo}
 dirspecialtypes = {"DCOS":dcos, "DCHR":dchr, "DSCR":dscr,
                 "DSOU":dsou}
+
 
 # Debugging/verbose messages
 def message(stringin):
@@ -545,8 +551,11 @@ def compact():
 def addFiles(mergefile, filelist, currpath):
     blocksize = 0
     doNLSC = False
+    doRMHD = False
     numLSCR = 0
+    numOBCD = 0
     nlscpos = 0
+    rmhdpos = 0
 
     for f in filelist:
         if options.modify:
@@ -602,6 +611,11 @@ def addFiles(mergefile, filelist, currpath):
             nlscpos = mergefile.tell()
         elif fhead == "LSCR":
             numLSCR += 1
+        elif fhead == "RMHD":
+            doRMHD = True
+            rmhdpos = mergefile.tell()
+        elif fhead == "OBCD":
+            numOBCD += 1
 
         # Overwrite header if necessary (and it's not a mergefile)
         # Not a good idea to modify files not created by the compaction process
@@ -634,6 +648,11 @@ def addFiles(mergefile, filelist, currpath):
         mpos = mergefile.tell()
         mergefile.seek(nlscpos + 8, 0)
         decrypt(intToBytes(numLSCR, 2, 1)).tofile(mergefile)
+        mergefile.seek(mpos, 0)
+    if doRMHD: # Note how many objects in a room
+        mpos = mergefile.tell()
+        mergefile.seek(rmhdpos + 12, 0)
+        decrypt(intToBytes(numOBCD, 2, 1)).tofile(mergefile)
         mergefile.seek(mpos, 0)
 
 
