@@ -1,0 +1,23 @@
+v0.2:
+- Now supports Monkey Island 1 and Indiana Jones and the Fate of Atlantis
+   (rooms weren't being numbered properly, MI2 just happened to have no
+   gaps in its room numbering). FoA has not been tested much, it does
+   throw up some problems with SOUN blocks, but appears to repack okay.
+- NLSC blocks are generated when packing, so you can add new local scripts
+   (LSCR blocks).
+- RMHD blocks are partially generated when packing - they now record the
+   number of objects in a room, so there is the potential to add new ones.
+- Room names are now read, stored in the LFLF directory name. Names are
+   padded/truncated to 9 characters on packing, but there will probably
+   be bugs with non-ASCII names.
+- CHAR, COST, SCRP and SOUN blocks are now numbered correctly (were 1
+   higher than they should have been).
+- Cleaned up the command line options a bit. You'll mostly want to use "-e"
+   and "-p" to extract and pack respectively. Specify the game with 
+   "-g [MI1|MI2|FOA]". Less useful commands have been labelled "[Expert]".
+- Generated directory files (e.g. "DSOU.gen", "DCOS.gen") are deleted when
+   extraction finishes.
+- Workaround for Monkey Island 1 CD SOUN blocks which have no sub-blocks.
+
+v0.1:
+- Initial release. Only supports Monkey Island 2.
