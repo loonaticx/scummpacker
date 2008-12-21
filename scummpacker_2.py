@@ -2,22 +2,21 @@
 ####
 #### SCUMM Packer
 #### Laurence Dougal Myers
-#### Begun 19 September 2004
+#### v0.1 Begun 19 September 2004
+#### v0.2 21 December 2008
 ####
 #### Performs mostly-dumb extraction or semi-intelligent compaction of
 #### LucasArts games' resource files.
 ####
 #### Extraction stores ID based on offset tables in RESOURCE.000
 #### Compaction merges dumped files, generating headers and file sizes
-#### automatically, and generates offset tables for RESROUCE.000
+#### automatically, and generates offset tables for RESOURCE.000
 ####
-#### Currently only works for Monkey Island 2.
+#### Currently works for Monkey Island 1 and 2, and untested Fate of Atlantis.
 ####
 ##################################################################
 #### TODO:
 #### Make try/catches around all file operations and make them better
-####
-#### Generate NLSC chunks (they only contain how many local scripts there are)
 ####
 #### Modify chunks that store how many items they hold (needed for
 #### RMIM\RMIH (z-buffers), OBIM\IMHD (images and z-buffers per image),
@@ -85,12 +84,13 @@ def message(stringin):
 ##  pass
 
 # Decrypt also doubles as encrypt, I'm just too lazy to name it properly
-def decrypt(input):
-    """ Perform an XOR with a decrypt value on an array."""
+def decrypt(input, decval=decryptvalue):
+    """ Perform an XOR with a decrypt value on an array.
+    Works in-place, but also returns the modified input."""
     if isinstance(input, array.array):
         # Should also check if it's an array of the same typecode
         for i, byte in enumerate(input):
-            input[i] = byte ^ decryptvalue 
+            input[i] = byte ^ decval
     return input
 
 def getByte(file, encrypted=1):
@@ -196,7 +196,6 @@ def extract(resfile, parentcounter, parentoffset, parentnode):
     """ Recursively trawl through a file, creating directories for
     container blocks and dumping all other blocks into files.
     """
-    
     header = getDWord(resfile).tostring()
     # Check if it's a container block
     if header in containertypes or (header[:2] == "IM" and header != "IMHD"):
@@ -210,16 +209,16 @@ def extract(resfile, parentcounter, parentoffset, parentnode):
                 newpathname = str(parentcounter).zfill(3) + "_" + header + \
                                              "_" + str(dsou[offkey]).zfill(3)
             else:
-                print "WARNING! Could not find " + str(offkey) + " in " + header + \
-                      " directory lookup!"
+                print "WARNING! Could not find " + str(offkey) + " in " + \
+                        header + " directory lookup!"
                 print "The block will be dumped but will not be useable in-game."
                 newpathname = str(parentcounter).zfill(3) + "_" + header
                 
             # New workaround for Monkey Island 1, there seems to be sound SOUN
             #  blocks that are 32 bytes long, with no sub-data, so they're not
-            #  containers. So, we'll just dump those blocks.
-            #  (Unfortunately I've just duplicated the dumping code from below,
-            #   perhaps it should be moved to a function.)
+            #  containers (probably trigger CD tracks playing). So, we'll just
+            #  dump those blocks. (I've just duplicated the dumping code from
+            #  below, perhaps it should be moved to a function.)
             blocksize = arrayToInt(getDWord(resfile))
             if blocksize == 32:
                 startofblock = resfile.tell()-8
@@ -249,11 +248,11 @@ def extract(resfile, parentcounter, parentoffset, parentnode):
                 
         elif header == "LFLF":
             if droo.has_key(parentcounter):
-                newpathname = str(droo[parentcounter][0]).zfill(3) + "_" + header
-            # This is a new room... not really supported
+                newpathname = str(droo[parentcounter][0]).zfill(3) + "_" + \
+                                header + "_" + rnam[droo[parentcounter][0]]
             else:
-                print("WARNING: Found a new room, but this is not yet " +
-                        "supported by ScummPacker. You will have problems.")
+                print("WARNING: Found an unknown room (" + str(parentcounter) +
+                      "), you will have problems.")
                 newpathname = str(parentcounter).zfill(3) + "_" + header
                 
         else:
@@ -285,16 +284,19 @@ def extract(resfile, parentcounter, parentoffset, parentnode):
                         ", \"" + rnam[droo[parentcounter][0]] + "\"")
             else:
                 message("Starting LFLF block number " + str(parentcounter))
-        # While we're still in the container block
+        # While we're still in the container block, extract all sub-blocks
         while resfile.tell() < startblockpos + blocksize:
-            if droo.has_key(parentcounter):
+            if header == "LFLF" and droo.has_key(parentcounter):
                 extract(resfile, count, startblockpos, droo[parentcounter][0])
             else:
                 extract(resfile, count, startblockpos, parentcounter)
             count += 1
+        
+        
+        
         # Move back to root container block when done
         os.chdir(os.path.dirname(os.getcwd()))
-        if header == "LFLF":
+        if header == "LFLF": # It's a bit crap having 3 tests for LFLF so close
             if droo.has_key(parentcounter):
                 print("Finished LFLF block number " + str(parentcounter) +
                         ", room #" + str(droo[parentcounter][0]) +
@@ -316,7 +318,10 @@ def extract(resfile, parentcounter, parentoffset, parentnode):
         elif header in specialtypes:
             
             if header == "LOFF":
+                # We don't bother dumping LOFF chunk because we'll just
+                #  regenerate it when packing
                 trackRoomOffsets(resfile)
+                return
                 
             else:
                 # Check if roomid and offset is in directory, then assign
@@ -438,7 +443,7 @@ def compactMonster():
 def compact():
     currpath = os.getcwd()
     mainlist = os.listdir(currpath)
-    # Ignore everythign that doesn't start with "123_" naming convention
+    # Ignore everything that doesn't start with "123_" naming convention
     repattern = re.compile("[0-9]{3}_")
     mainlist = [files for files in mainlist if 
                 re.match(repattern, files[0:4]) != None]
@@ -504,11 +509,13 @@ def compact():
         mergefile.write('0'*(numRooms*5)) # reserve room for offsets file
         # don't forget to add offsets table size!
         blocksize = addFiles(mergefile, filelist, currpath) + (8 + 1 + numRooms*5)
-        for room in droo.keys():
+        drookeys = droo.keys()
+        drookeys.sort()
+        for i, room in enumerate(drookeys):
             # set position to wherever we need to be
-            mergefile.seek(startOffsetsChunk + 5*(room-1), 0)
+            mergefile.seek(startOffsetsChunk + 5 * i, 0)
             # Store room num + room offset (encrypted)
-            decrypt(intToBytes(room, 1) +
+            decrypt(intToBytes(room, 1) + 
              intToBytes(droo[room], length=4, LE=1)).tofile(mergefile)
     else:
         blocksize = addFiles(mergefile, filelist, currpath)
@@ -526,16 +533,20 @@ def compact():
     addHeader(mergefile, header, blocksize)
 
     if header == "LFLF":
-        print "Finished packing room " + currdir[0:3]
+        print ("Finished packing room #" + currdir[0:3] +
+               ", \"" + currdir.rpartition("_")[2] + "\"")
     # Return final container so we can rename it or something
     elif header == "LECF":
         print "Finished packing LECF"
 
 
 # TODO: modify files that contain number of other files in them
-# eg image headers, NLSCs etc
+# eg image headers. (NLSCs are handled)
 def addFiles(mergefile, filelist, currpath):
     blocksize = 0
+    doNLSC = False
+    numLSCR = 0
+    nlscpos = 0
 
     for f in filelist:
         if options.modify:
@@ -559,27 +570,38 @@ def addFiles(mergefile, filelist, currpath):
         # Room tracking is dumb, maybe it should add number during extraction?
         # It currently tracks LFLFs rather than ROOMs.
         if fhead == "LFLF":
-            roomnum = f[:3] # only 3 chars, ignore '_'
+            roomnum = int(f[:3]) # only 3 chars, ignore '_'
             # Don't subtract 8 as we're tracking ROOMs (first items in
             # LFLF blocks), not LFLFs
             # But why does it need 8 added? hurm...
             # Must be some header I haven't factored into my calculations...
-            droo[int(roomnum)] = mergefile.tell() + 8
+            droo[roomnum] = mergefile.tell() + 8
+            # Record room name if it's there (if it's not, name will be "LFLF")
+            roomname = f.rpartition("_")[2].partition(".tmp")[0]
+            rnam[roomnum] = roomname
         # ROOM is a special type but we're tracking LFLFs instead because
         # I'm a big fat dummyhead
         elif fhead in specialtypes and fhead != "ROOM":
             dirdict = specialtypes[fhead]
-            if f[9:12] != 'dmp':
+            if f[9:12] != 'dmp' and f[9:12] != 'tmp':
                 objid = int(f[9:12])
                 # Roomnum is determined by the containing LFLF path
-                # eg ...\000_LECF\001_LFLF\002_SOUN_170.tmp
+                # eg ...\000_LECF\001_LFLF_intro\002_SOUN_170.tmp
                 # roomnum will be 001
                 roomnum = int(os.path.basename(os.getcwd())[:3])
                 dirdict[objid] = (roomnum, mergefile.tell() - 8)
+                ##if fhead == "CHAR": # For debugging
+                ##    print dirdict
             else:
-                print "WARNING: "+ os.path.join(os.getcwd(),f)
+                print "WARNING: " + os.path.join(os.getcwd(),f)
                 print "  File has no ID - offset will not be generated."
                 print "  This file may not be used in-game!"
+        elif fhead == "NLSC":
+            # NOTE: Only creates an NLSC if there's already one there.
+            doNLSC = True
+            nlscpos = mergefile.tell()
+        elif fhead == "LSCR":
+            numLSCR += 1
 
         # Overwrite header if necessary (and it's not a mergefile)
         # Not a good idea to modify files not created by the compaction process
@@ -606,6 +628,14 @@ def addFiles(mergefile, filelist, currpath):
         if f[-4:] == '.tmp' and f != '000_LECF.tmp':
             os.remove(os.path.join(currpath, f))
         blocksize += fsize
+
+    # Go back and make a note of how many LSCRs there were.
+    if doNLSC:
+        mpos = mergefile.tell()
+        mergefile.seek(nlscpos + 8, 0)
+        decrypt(intToBytes(numLSCR, 2, 1)).tofile(mergefile)
+        mergefile.seek(mpos, 0)
+
 
     return blocksize
 
@@ -653,9 +683,6 @@ def trackOffsets(dirfile, dumpall=0):
             elif header == "DSOU":
                 directory = dsou
             elif header == "RNAM":
-                # This isn't very useful. I wanted to get the real room numbers
-                #  from RNAM, but they're not in sequential order here, so
-                #  we do that with LOFF.
                 #directory = rnam
                 start = dirfile.tell()
                 roomOrder = 1
@@ -672,14 +699,6 @@ def trackOffsets(dirfile, dumpall=0):
                         
                     roomNo = arrayToInt(getByte(dirfile))
                     roomOrder += 1
-                    
-                # Dump this anyway
-                dirfile.seek(start, 0)
-                message(header + " chunk found, dumping.")
-                dirfile.seek(-8, 1)
-                dmpfile = file(header + ".dmp", 'w+b')
-                getChunk(dirfile, blocksize).tofile(dmpfile)
-                dmpfile.close()
                 continue
             numitems = arrayToInt(getWordLE(dirfile))
             message(str(numitems) + " items found.")
@@ -688,8 +707,9 @@ def trackOffsets(dirfile, dumpall=0):
                 roomlist.append(arrayToInt(getByte(dirfile)))
             # Store a tuple of room ID and offset within the room as keys.
             # Items are numbered sequentially.
+            # (was i + 1)
             for i in xrange(numitems):
-                directory[(roomlist[i], arrayToInt(getDWordLE(dirfile)))] = i+1
+                directory[(roomlist[i], arrayToInt(getDWordLE(dirfile)))] = i
             
         else: # Dump other blocks - will be used as dummy blocks when packing
             message(header + " chunk found, dumping.")
@@ -703,7 +723,7 @@ def trackRoomOffsets(dirfile):
     """ Tracks room offsets from a LOFF block."""
     
     print "Reading room numbers & offsets from LOFF block..."
-    start = dirfile.tell()
+    #start = dirfile.tell()
     numRooms = arrayToInt(getByte(dirfile))
     
     for i in xrange(1, numRooms + 1):
@@ -712,7 +732,7 @@ def trackRoomOffsets(dirfile):
         
         droo[i] = (roomNo, roomOffset)
         
-    dirfile.seek(start, 0)
+    #dirfile.seek(start, 0)
 
 # Maybe the room offsets should also be handled here
 def createOffsets(blocktype):
@@ -730,30 +750,59 @@ def createOffsets(blocktype):
     idsetc = offdir.keys()
     idsetc.sort()
     ##numEntries = len(offdir)
-    numEntries = idsetc[-1]  # Not just len() as there could be blank entries
+    numEntries = idsetc[-1] + 1 # Not just len() as there could be blank entries
 
     # Pad the file out if it's below a certain size (hopefully fixes
     # problems when using the original interpreter)
     # Blank spaces in SCRP offset table must have some unknown meaning?
     # Or there's a minsize in MAXS? Who knows...
+    # (Also added DSOU and DCOS, needed for at least MI1)
     if blocktype == "DSCR" and numEntries < 199:
         numEntries = 199
+    elif (blocktype == "DSOU" or blocktype == "DCOS") and numEntries < 150:
+        numEntries = 150
 
-    addHeader(tablefile, blocktype, 8 + 2 + numEntries + numEntries*4, 0)
+    addHeader(tablefile, blocktype, 8 + 2 + numEntries + numEntries * 4, 0)
     intToBytes(numEntries, 2, 1).tofile(tablefile)
     startOfBlock = tablefile.tell() # unnecessary, should always be 10
     # Reserve room for offsets files
     tmpfiller = array.array('B')
     tmpfiller.append(0)
-    (tmpfiller * (numEntries + numEntries*4)).tofile(tablefile)
+    (tmpfiller * (numEntries + numEntries * 4)).tofile(tablefile)
     
-    for id in offdir.keys():
+    for id in offdir.iterkeys():
         # Write room number
-        tablefile.seek(startOfBlock + id-1, 0)
+        tablefile.seek(startOfBlock + id, 0) # was id - 1
         intToBytes(offdir[id][0], 1).tofile(tablefile)
         # Write offset within room
-        tablefile.seek(startOfBlock + numEntries + (id-1)*4, 0)
+        tablefile.seek(startOfBlock + numEntries + (id) * 4, 0) # was id - 1
         intToBytes(offdir[id][1], 4, 1).tofile(tablefile)
+    tablefile.close()
+
+def createRNAM():
+    """ There will probably be problems if the path names aren't 8-bit ASCII.
+    
+    Info from http://scumm.mixnmojo.com/?page=specs&file=indexfiles.txt
+        RNAM
+        ----
+        Block Name	  (4 bytes)
+        Block Size	  (4 bytes BE)
+         #Room No	  (1 byte)
+         #Room Name	  (9 bytes) XOR'ed with FF
+        Blank (00) byte	  (1 byte) Marks end of chunk"""
+    global rnam
+    tablefile = file("RNAM.gen", 'wb')
+    addHeader(tablefile, "RNAM", 8 + (len(droo) * 10) + 1, 0)
+    for roomNo, roomName in rnam.iteritems():
+        intToBytes(roomNo, 1).tofile(tablefile)
+        if len(roomName) > 9:
+            roomName = roomName[:9]
+        elif len(roomName) < 9:
+            roomName = roomName + ("\x00" * (9 - len(roomName)))
+        roomName = strToArray(roomName)
+        decrypt(roomName, 0xFF)
+        roomName.tofile(tablefile)
+    tablefile.write("\x00")
     tablefile.close()
 
 
@@ -777,6 +826,10 @@ def main(argv):
     parser.add_option("-e", "--extract", action="store_true",
                       dest="extract", default=False,
                       help="Dump files from two resource files.")
+    parser.add_option("-u", "--unpack", action="store_true",
+                      dest="extract", default=False,
+                      help="Dump files from two resource files "
+                      "(alias of --extract)")
     parser.add_option("-p", "--pack", action="store_true",
                       dest="pack", default=False,
                       help="Pack previously extracted files into "
@@ -883,6 +936,7 @@ def main(argv):
                 print "Generating offset tables..."
                 os.chdir(basepath)
                 try:
+                    createRNAM()
                     createOffsets("DSCR")
                     createOffsets("DCHR")
                     createOffsets("DCOS")
@@ -905,7 +959,7 @@ def main(argv):
             os.chdir(basepath)
             return
         else:
-            filelist = ['RNAM.dmp', 'MAXS.dmp', 'DROO.dmp', 'DSCR.gen',
+            filelist = ['RNAM.gen', 'MAXS.dmp', 'DROO.dmp', 'DSCR.gen',
                     'DSOU.gen', 'DCOS.gen', 'DCHR.gen', 'DOBJ.dmp']
         print "Merging offset tables into Resource.000..."
         indexfile = file('Resource.000', 'wb')
@@ -916,6 +970,9 @@ def main(argv):
                 os.path.join(os.getcwd(), tablefile)
                 ).st_size).tofile(indexfile)
             tf.close()
+            if tablefile.endswith(".gen"):
+                os.remove(os.path.join(os.getcwd(), tablefile))
+            
         indexfile.close()
 
         print "Packing complete!"
