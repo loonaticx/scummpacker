@@ -1,5 +1,5 @@
 v0.2:
-- Now supports Monkey Island 1 and Indiana Jones and the Fate of Atlantis
+- Now supports Monkey Island 1 CD and Indiana Jones and the Fate of Atlantis
    (rooms weren't being numbered properly, MI2 just happened to have no
    gaps in its room numbering). FoA has not been tested much, it does
    throw up some problems with SOUN blocks, but appears to repack okay.
