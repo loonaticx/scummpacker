@@ -20,38 +20,53 @@ def debug(text):
 #def write_byte(file, byte):
     #file.write()
     
-def crypt(inVal, cryptVal):
-    if cryptVal is None:
-        return inVal
-    if type(inVal) is str:
+def crypt(in_val, crypt_val):
+    if crypt_val is None:
+        return in_val
+    if type(in_val) is str:
         outString = ''
         for c in inString:
-            outString += c ^ cryptVal
+            outString += c ^ crypt_val
         return outString
-    elif type(inVal) is array.ArrayType:
-        for i, byte in enumerate(inVal):
-            inVal[i] = byte ^ cryptVal
-        return inVal
-    raise ScummPackerException("Could not encrypt values of type: " + str(type(inVal)))
+    elif type(in_val) is array.ArrayType:
+        for i, byte in enumerate(in_val):
+            in_val[i] = byte ^ crypt_val
+        return in_val
+    raise ScummPackerException("Could not encrypt values of type: " + str(type(in_val)))
 
 LE = False
 BE = True
-def strToInt(inVal, isBE=False):
-    outVal = 0
-    #if type(inVal) is str:
-    if isBE:
-        inVal = reversed(inVal)
-    for i, c in enumerate(inVal):
-        outVal += ord(c) << 8*i
-        #return outVal
-    #elif type(inVal) is array.ArrayType:
-        #if isBE:
-            #inVal.reverse()
-        #for i, c in enumerate(inVal):
-            #outVal += c << 8*i
-        #return outVal
-    #raise ScummPackerException("Could not convert values of type: " + str(type(inVal)) + " to int.")
+def str_to_int(in_val, is_BE=False):
+    out_val = 0
+    if is_BE:
+        in_val = reversed(in_val)
+    for i, c in enumerate(in_val):
+        out_val += ord(c) << 8*i
+    return out_val
 
+def int_to_str(in_val, numBytes=4, is_BE=False):
+    out_val = array.array('B')
+    i = 0
+    while i < numBytes:
+        b = (in_val >> i) & 0xFF 
+        out_val.append(b)
+        i += 1
+    if is_BE:
+        out_val.reverse()
+    return out_val.tostring()
+    
 
 class ScummPackerException(ApplicationException):
     pass
+
+# Singleton recipe by Marc Santiago (http://code.activestate.com/recipes/52558/#c8)
+class Singleton(object):
+  __single = None # the one, true Singleton
+
+  def __new__(classtype, *args, **kwargs):
+    # Check to see if a __single exists already for this class
+    # Compare class types instead of just looking for None so
+    # that subclasses will create their own __single objects
+    if classtype != type(classtype.__single):
+      classtype.__single = object.__new__(classtype, *args, **kwargs)
+    return classtype.__single
