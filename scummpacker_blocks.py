@@ -83,20 +83,7 @@ class BlockGloballyIndexedV5(BlockDefaultV5):
     def generate_file_name(self):
         return self.name + "_" + str(self.index).zfill(3) + ".dmp"
 
-
-class BlockLocallyIndexedV5(BlockDefaultV5):
-    def __init__(self, *args):
-        super(BlockLocallyIndexedV5, self).__init__(args)
-        self.index = None
     
-    # Crap on a crapstick
-    def set_index(self, index):
-        self.index = index
-        
-    def generate_file_name(self):
-        return self.name + "_" + str(self.index).zfill(3) + ".dmp"
-
-
 class BlockContainerV5(BlockDefaultV5):
     def __init__(self, *args):
         super(BlockContainerV5, self).__init__(args)
@@ -107,9 +94,9 @@ class BlockContainerV5(BlockDefaultV5):
         while resource.tell() < end:
             block = BlockDispatcherV5.dispatch_next_block(resource)
             block.loadFromResource(resource)
-            self._add_child_block(block)
+            self.append(block)
             
-    def _add_child_block(self, block):
+    def append(self, block):
         self.children.append(block)
     
     def save_to_file(self, path):
@@ -120,16 +107,100 @@ class BlockContainerV5(BlockDefaultV5):
             child.save_to_file(path)
         
     def generate_file_name(self):
-        return self.name #+ "_" + str(self.index).zfill(3)
+        return self.name
 
 
-class BlockROOM(BlockIndexedV5, BlockContainerV5):
-    pass
+class BlockROOM(BlockContainerV5): # also globally indexed
+    def __init__(self, *args):
+        super(BlockContainerV5, self).__init__(args)
+        self.index = None
+        self.script_types = frozenset(["ENCD", 
+                                       "EXCD",
+                                       "LSCR"])
+        self.object_types = frozenset(["OBIM",
+                                       "OBCD"])
+        
+    def _read_data(self, resource, start):
+        self.index = control.global_index_map.get_index(self.name, start)
+        end = start + self.size
+        object_container = ObjectBlockContainer()
+        script_container = ScriptBlockContainer()
+        while resource.tell() < end:
+            block = BlockDispatcherV5.dispatch_next_block(resource)
+            block.loadFromResource(resource)
+            if block.name in self.script_types:
+                script_container.append(block)
+            elif block.name == "OBIM":
+                object_container.set_image_block(block)
+            elif block.name == "OBCD":
+                object_container.set_code_block(block)
+            elif block.name == "NLSC":
+                del block
+                continue
+            else:
+                self.append(block)
+        
 
-
-class BlockLOFF(BlockIndexedV5):
-    pass
     
+class BlockLFLF(BlockContainerV5):
+    #self.room_name
+    def generate_file_name(self):
+        return self.name + "_" + str(self.index).zfill(3) + "_" + self.room_name
+    
+    
+class BlockLOFF(BlockGloballyIndexedV5):
+    pass
+
+
+class ScriptBlockContainer(object):
+    def __init__(self):
+        self.scripts = []
+    
+    def append(self, block):
+        self.scripts.append(block)
+    
+    def save_to_file(self, path):
+        newpath = os.path.join(path, self.generate_file_name())
+        if not os.path.isdir(newpath):
+            os.mkdir(newpath) # throws an exception if can't create dir
+        for s in self.scripts:
+            s.save_to_file(newpath)
+        
+    def generate_file_name(self):
+        return "scripts"
+
+
+class ObjectBlockContainer(object):
+    def __init__(self):
+        self.objects = {}
+    
+    def set_code_block(self, block):
+        if not block.objid in self.objects:
+            self.objects[block.objid] = [None, None] # pos1 = image, pos2 = code
+        self.objects[block.objid][1] = block
+
+    def set_image_block(self, block):
+        if not block.objid in self.objects:
+            self.objects[block.objid] = [None, None] # pos1 = image, pos2 = code
+        self.objects[block.objid][0] = block
+        
+    def save_to_file(self, path):
+        newpath = os.path.join(path, self.generate_file_name())
+        if not os.path.isdir(newpath):
+            os.mkdir(newpath) # throws an exception if can't create dir
+        for objimage, objcode in self.objects.values():
+            objimage.save_to_file(newpath)
+            objcode.save_to_file(newpath)
+        
+    def generate_file_name(self):
+        return "objects"
+    
+class BlockOBIM(BlockContainerV5):
+    def _read_data(self, resource):
+        pass
+    
+    def generate_file_name(self):
+        return self.objid
     
 class AbstractBlockDispatcher(object):
     CRYPT_VALUE = None
@@ -180,7 +251,7 @@ class BlockDispatcherV5(AbstractBlockDispatcher):
         
         # Other special blocks
         "LOFF" : BlockLOFF
-    }    
+    }
 
 
 class IndexFileReader(AbstractBlockReader):
