@@ -20,7 +20,7 @@ class AbstractBlock(object):
         raise NotImplementedError("This method must be overriden by a concrete class.")
 
     def _read_data(self, resource, start):
-        self.data = util.crypt(self._read_raw_data(resource, self.size - self.block_name_length - 4), self.crypt_value)
+        self.data = util.crypt(self._read_raw_data(resource, self.size - (resource.tell() - start)), self.crypt_value)
         
     def _read_name(self, resource):
         return resource.read(self.block_name_length)
@@ -44,7 +44,7 @@ class AbstractBlock(object):
         raise NotImplementedError("This method must be overriden by a concrete class.")
 
     def _write_data(self, outfile, path):
-        self._write_raw_data(self, outfile, path)
+        self._write_raw_data(self, outfile, path, False)
 
     def _write_raw_data(self, outfile, path, encrypt):
         if encrypt:
@@ -139,9 +139,9 @@ class BlockROOM(BlockContainerV5): # also globally indexed
             if block.name in self.script_types:
                 script_container.append(block)
             elif block.name == "OBIM":
-                object_container.set_image_block(block)
+                object_container.add_image_block(block)
             elif block.name == "OBCD":
-                object_container.set_code_block(block)
+                object_container.add_code_block(block)
             elif block.name == "NLSC": # ignore this since we can generate it
                 del block
                 continue
@@ -181,18 +181,27 @@ class ScriptBlockContainer(object):
 
 class BlockLSCRV5(BlockDefaultV5):
     def _read_data(self, resource, start):
+        self.script_id = util.crypt(util.str_to_int(resource.read(1)), self.crypt_value)
+        self.data = util.crypt(self._read_raw_data(resource, self.size - (resource.tell() - start)), self.crypt_value)
+        
+    def _write_data(self, outfile, path):
+        outfile.write(util.int_to_str(self.script_id, numBytes=1))
+        self._write_raw_data(self, outfile, path, False)
+        
+    def generate_file_name(self):
+        return self.name + "_" + str(self.script_id).zfill(3) + ".dmp"
         
 
 class ObjectBlockContainer(object):
     def __init__(self):
         self.objects = {}
     
-    def set_code_block(self, block):
+    def add_code_block(self, block):
         if not block.obj_id in self.objects:
             self.objects[block.obj_id] = [None, None] # pos1 = image, pos2 = code
         self.objects[block.obj_id][1] = block
 
-    def set_image_block(self, block):
+    def add_image_block(self, block):
         if not block.obj_id in self.objects:
             self.objects[block.obj_id] = [None, None] # pos1 = image, pos2 = code
         self.objects[block.obj_id][0] = block
@@ -209,7 +218,7 @@ class ObjectBlockContainer(object):
         return "objects"
     
     
-class BlockOBIM(BlockContainerV5):
+class BlockOBIMV5(BlockContainerV5):
     def _read_data(self, resource, start):
         end = start + self.size
         block = BlockIMHDV5(self.block_name_length, self.crypt_value)
@@ -225,7 +234,6 @@ class BlockOBIM(BlockContainerV5):
     
     def generate_file_name(self):
         return self.obj_id
-
     
 class BlockIMHDV5(BlockDefaultV5):
     def _read_data(self, resource, start):
@@ -233,12 +241,14 @@ class BlockIMHDV5(BlockDefaultV5):
         obj id       : 16le
         num imnn     : 16le
         num zpnn     : 16le (per IMnn block)
-        unknown      : 16
-         ^ (ScummVM object.h seems to think the first byte is flags)
+        flags        : 8
+        unknown      : 8
         x            : 16le
         y            : 16le
         width        : 16le
         height       : 16le
+        
+        not sure about the following:
         num hotspots : 16le (usually one for each IMnn, but their is one even
                        if no IMnn is present)
         hotspots
@@ -250,17 +260,53 @@ class BlockIMHDV5(BlockDefaultV5):
         
         # Unpack the values 
         self.obj_id, self.num_imnn, self.num_zpnn, self.flags, self.unknown, \
-            self.x, self.y, self.width, self.height, self.num_hotspots = values
-        
-        # Read the hotspots
-##        i = self.num_hotspots
-##        self.hotspots = []
-##        while i > 0:
-##            hotspot_pos = struct.unpack("<2h", util.crypt(resource.read(4), self.crypt_value))
-##            self.hotspots.append(hotspot_pos)
-##            i -= 1
+            self.x, self.y, self.width, self.height = values
 
     
+class BlockOBCDV5(BlockContainerV5):
+    def _read_data(self, resource, start):
+        end = start + self.size
+        block = BlockCDHDV5(self.block_name_length, self.crypt_value)
+        block.loadFromResource(resource)
+        self.obj_id = block.obj_id # maybe should handle header info better
+        self.cdhd = block
+        
+        block = BlockDefaultV5(self.block_name_length, self.crypt_value)
+        block.loadFromResource(resource)
+        self.verb = block
+        
+        block = BlockDefaultV5(self.block_name_length, self.crypt_value)
+        block.loadFromResource(resource)
+        self.obna = block
+        
+        self.obj_name = self.obna.data.rstrip("\x00") # cheat
+    
+    def generate_file_name(self):
+        return self.obj_id
+    
+    
+class BlockCDHDV5(BlockDefaultV5):
+    def _read_data(self, resource, start):
+        """
+          obj id    : 16le
+          x         : 8
+          y         : 8
+          width     : 8
+          height    : 8
+          flags     : 8
+          parent    : 8
+          walk_x    : 16le signed
+          walk_y    : 16le signed
+          actor dir : 8 (direction the actor will look at when standing in front
+                         of the object)
+        """
+        values = struct.unpack("<H6B2hB", util.crypt(resource.read(13), self.crypt_value))
+        
+        # Unpack the values 
+        self.obj_id, self.x, self.y, self.width, self.height, self.flags, \
+            self.parent, self.walk_x, self.walk_y, self._actor_dir = values
+        
+        
 class AbstractBlockDispatcher(object):
     CRYPT_VALUE = None
     BLOCK_NAME_LENGTH = None
@@ -318,3 +364,8 @@ class IndexFileReader(AbstractBlockReader):
     def dispatch_next_block(self, resource, path):
         pass
     
+    
+def __test():
+    pass
+    
+if __name__ == "__main__": __test()
