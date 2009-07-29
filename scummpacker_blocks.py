@@ -1,13 +1,14 @@
 import array
 import os
+import struct
 import scummpacker_control as control
 import scummpacker_util as util
 
 
 class AbstractBlock(object):
     def __init__(self, block_name_length, crypt_value):
-        self.BLOCK_NAME_LENGTH = block_name_length
-        self.CRYPT_VALUE = crypt_value
+        self.block_name_length = block_name_length
+        self.crypt_value = crypt_value
     
     def load_from_resource(self, resource):
         start = resource.tell()
@@ -19,17 +20,17 @@ class AbstractBlock(object):
         raise NotImplementedError("This method must be overriden by a concrete class.")
 
     def _read_data(self, resource, start):
-        self.data = util.crypt(self._read_raw_data(resource), self.CRYPT_VALUE)
+        self.data = util.crypt(self._read_raw_data(resource, self.size - self.block_name_length - 4), self.crypt_value)
         
     def _read_name(self, resource):
-        return resource.read(self.BLOCK_NAME_LENGTH)
+        return resource.read(self.block_name_length)
     
     def _read_size(self, resource):
         return util.str_to_int(resource.read(4), util.BE)
     
-    def _read_raw_data(self, resource):
+    def _read_raw_data(self, resource, size):
         data = array.array('B')
-        data.fromfile(resource, self.size)
+        data.fromfile(resource, size)
         return data
 
     def save_to_file(self, path):
@@ -48,22 +49,22 @@ class AbstractBlock(object):
     def _write_raw_data(self, outfile, path, encrypt):
         if encrypt:
             for i, b in enumerate(self.data):
-                self.data[i] = util.crypt(b, self.CRYPT_VALUE)
+                self.data[i] = util.crypt(b, self.crypt_value)
         self.data.tofile(outfile)
         
     def generate_file_name(self):
         return self.name + ".dmp"
 
 
-class BlockDefaultV5(BlockDefault):
+class BlockDefaultV5(AbstractBlock):
     def _read_header(self, resource):
         # Should be reversed for old format resources
-        self.name = util.crypt(self._read_name(resource), self.CRYPT_VALUE)
-        self.size = util.crypt(self._read_size(resource), self.CRYPT_VALUE)
+        self.name = util.crypt(self._read_name(resource), self.crypt_value)
+        self.size = util.crypt(self._read_size(resource), self.crypt_value)
 
     def _write_header(self, outfile, path):
-        outfile.write(util.crypt(self.name, self.CRYPT_VALUE))
-        outfile.write(util.crypt_value(util.int_to_str(self.size, util.BE), self.CRYPT_VALUE))
+        outfile.write(util.crypt(self.name, self.crypt_value))
+        outfile.write(util.crypt_value(util.int_to_str(self.size, util.BE), self.crypt_value))
 
 
 class BlockSoundV5(BlockDefaultV5):
@@ -100,9 +101,16 @@ class BlockContainerV5(BlockDefaultV5):
         self.children.append(block)
     
     def save_to_file(self, path):
-        newpath = os.path.join(path, self.generate_file_name())
+        newpath = self._create_directory(path)
+        self._save_children(newpath)
+        
+    def _create_directory(self, start_path):
+        newpath = os.path.join(start_path, self.generate_file_name())
         if not os.path.isdir(newpath):
             os.mkdir(newpath) # throws an exception if can't create dir
+        return newpath
+    
+    def _save_children(self, path):
         for child in self.children:
             child.save_to_file(path)
         
@@ -134,12 +142,13 @@ class BlockROOM(BlockContainerV5): # also globally indexed
                 object_container.set_image_block(block)
             elif block.name == "OBCD":
                 object_container.set_code_block(block)
-            elif block.name == "NLSC":
+            elif block.name == "NLSC": # ignore this since we can generate it
                 del block
                 continue
             else:
                 self.append(block)
-        
+        self.append(object_container)
+        self.append(script_container)
 
     
 class BlockLFLF(BlockContainerV5):
@@ -170,19 +179,23 @@ class ScriptBlockContainer(object):
         return "scripts"
 
 
+class BlockLSCRV5(BlockDefaultV5):
+    def _read_data(self, resource, start):
+        
+
 class ObjectBlockContainer(object):
     def __init__(self):
         self.objects = {}
     
     def set_code_block(self, block):
-        if not block.objid in self.objects:
-            self.objects[block.objid] = [None, None] # pos1 = image, pos2 = code
-        self.objects[block.objid][1] = block
+        if not block.obj_id in self.objects:
+            self.objects[block.obj_id] = [None, None] # pos1 = image, pos2 = code
+        self.objects[block.obj_id][1] = block
 
     def set_image_block(self, block):
-        if not block.objid in self.objects:
-            self.objects[block.objid] = [None, None] # pos1 = image, pos2 = code
-        self.objects[block.objid][0] = block
+        if not block.obj_id in self.objects:
+            self.objects[block.obj_id] = [None, None] # pos1 = image, pos2 = code
+        self.objects[block.obj_id][0] = block
         
     def save_to_file(self, path):
         newpath = os.path.join(path, self.generate_file_name())
@@ -195,12 +208,58 @@ class ObjectBlockContainer(object):
     def generate_file_name(self):
         return "objects"
     
+    
 class BlockOBIM(BlockContainerV5):
-    def _read_data(self, resource):
-        pass
+    def _read_data(self, resource, start):
+        end = start + self.size
+        block = BlockIMHDV5(self.block_name_length, self.crypt_value)
+        block.loadFromResource(resource)
+        self.obj_id = block.obj_id # maybe should handle header info better
+        self.imhd = block
+        i = block.num_inn
+        while i > 0:
+            block = BlockContainerV5(self.block_name_length, self.crypt_value)
+            block.load_from_resource(resource)
+            self.append(block)
+            i -= 1
     
     def generate_file_name(self):
-        return self.objid
+        return self.obj_id
+
+    
+class BlockIMHDV5(BlockDefaultV5):
+    def _read_data(self, resource, start):
+        """
+        obj id       : 16le
+        num imnn     : 16le
+        num zpnn     : 16le (per IMnn block)
+        unknown      : 16
+         ^ (ScummVM object.h seems to think the first byte is flags)
+        x            : 16le
+        y            : 16le
+        width        : 16le
+        height       : 16le
+        num hotspots : 16le (usually one for each IMnn, but their is one even
+                       if no IMnn is present)
+        hotspots
+          x          : 16le signed
+          y          : 16le signed
+        """
+
+        values = struct.unpack("<3H2B5H", util.crypt(resource.read(18), self.crypt_value))
+        
+        # Unpack the values 
+        self.obj_id, self.num_imnn, self.num_zpnn, self.flags, self.unknown, \
+            self.x, self.y, self.width, self.height, self.num_hotspots = values
+        
+        # Read the hotspots
+##        i = self.num_hotspots
+##        self.hotspots = []
+##        while i > 0:
+##            hotspot_pos = struct.unpack("<2h", util.crypt(resource.read(4), self.crypt_value))
+##            self.hotspots.append(hotspot_pos)
+##            i -= 1
+
     
 class AbstractBlockDispatcher(object):
     CRYPT_VALUE = None
@@ -219,10 +278,8 @@ class AbstractBlockDispatcher(object):
         block = block_type(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
         resource.seek(-self.BLOCK_NAME_LENGTH, os.SEEK_CUR)
         return block
-        #block.load_from_resource(resource)
-        #block.save_to_file(path)
 
-
+    
 class BlockDispatcherV5(AbstractBlockDispatcher):
     CRYPT_VALUE = 0x69
     BLOCK_NAME_LENGTH = 4
@@ -250,7 +307,10 @@ class BlockDispatcherV5(AbstractBlockDispatcher):
         "SOUN" : BlockIndexed,
         
         # Other special blocks
+        "IMHD" : BlockIMHDV5,
+        "LSCR" : BlockLSCRV5,
         "LOFF" : BlockLOFF
+        
     }
 
 

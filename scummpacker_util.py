@@ -54,19 +54,8 @@ def int_to_str(in_val, numBytes=4, is_BE=False):
     if is_BE:
         out_val.reverse()
     return out_val.tostring()
-    
+
 
 class ScummPackerException(ApplicationException):
     pass
 
-# Singleton recipe by Marc Santiago (http://code.activestate.com/recipes/52558/#c8)
-class Singleton(object):
-  __single = None # the one, true Singleton
-
-  def __new__(classtype, *args, **kwargs):
-    # Check to see if a __single exists already for this class
-    # Compare class types instead of just looking for None so
-    # that subclasses will create their own __single objects
-    if classtype != type(classtype.__single):
-      classtype.__single = object.__new__(classtype, *args, **kwargs)
-    return classtype.__single
