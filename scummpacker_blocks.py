@@ -4,29 +4,90 @@ import struct
 import scummpacker_control as control
 import scummpacker_util as util
 
+block_order_index_v5 = [
+    
+]
+block_order_res_v5 = [
+    "LOFF",
+    "LFLF",
+    
+    # Inside LFLF
+    "ROOM",
+    
+    # Inside ROOM
+    "RMHD",
+    "CYCL",
+    "TRNS",
+    "EPAL",
+    "BOXD",
+    "BOXM",
+    "CLUT",
+    "SCAL",
+    "RMIM",
+     #Inside RMIM
+     "RMIH",
+     "IM", # IMxx
+      #Inside IMxx
+      "SMAP"
+      "ZP" # ZPxx
+    "OBIM",
+     #Inside OBIM
+     "IMHD",
+     "IM",
+      #Inside IMxx
+      "SMAP"
+      "ZP" # ZPxx
+    "OBCD",
+     #Inside OBCD
+     "CDHD",
+     "VERB",
+     "OBNA",
+    "EXCD",
+    "ENCD",
+    "NLSC",
+    "LSCR",
+    
+    # Inside LFLF
+    "SCRP",
+    "SOUN",
+    "COST",
+    "CHAR"
+]
+
+block_dispatcher = None
 
 class AbstractBlock(object):
-    def __init__(self, block_name_length, crypt_value):
+    def __init__(self, block_name_length, crypt_value, *args, **kwds):
+        super(AbstractBlock, self).__init__(*args, **kwds)
         self.block_name_length = block_name_length
         self.crypt_value = crypt_value
     
     def load_from_resource(self, resource):
         start = resource.tell()
-        self._read_header(resource)
-        self._read_data(resource, start)
+        self._read_header(resource, True)
+        self._read_data(resource, start, True)
 
     def _read_header(self, resource):
         # Different in old format resources
         raise NotImplementedError("This method must be overriden by a concrete class.")
 
-    def _read_data(self, resource, start):
-        self.data = util.crypt(self._read_raw_data(resource, self.size - (resource.tell() - start)), self.crypt_value)
+    def _read_data(self, resource, start, decrypt):
+        data = self._read_raw_data(resource, self.size - (resource.tell() - start))
+        if decrypt:
+            data = util.crypt(data, self.crypt_value)
+        self.data = data
         
-    def _read_name(self, resource):
-        return resource.read(self.block_name_length)
+    def _read_name(self, resource, decrypt):
+        name = resource.read(self.block_name_length)
+        if decrypt:
+            name = util.crypt(name, self.crypt_value)
+        return name
     
-    def _read_size(self, resource):
-        return util.str_to_int(resource.read(4), util.BE)
+    def _read_size(self, resource, decrypt):
+        size = resource.read(4)
+        if decrypt:
+            size = util.crypt(size, self.crypt_value)
+        return util.str_to_int(size, util.BE)
     
     def _read_raw_data(self, resource, size):
         data = array.array('B')
@@ -35,16 +96,16 @@ class AbstractBlock(object):
 
     def save_to_file(self, path):
         outfile = file(os.path.join(path, self.generate_file_name()), 'wb')
-        self._write_header(outfile, path)
-        self._write_data(outfile, path)
+        self._write_header(outfile, path, False)
+        self._write_data(outfile, path, False)
         outfile.close()
 
-    def _write_header(self, outfile, path):
+    def _write_header(self, outfile, path, encrypt):
         # Different in old format resources
         raise NotImplementedError("This method must be overriden by a concrete class.")
 
-    def _write_data(self, outfile, path):
-        self._write_raw_data(self, outfile, path, False)
+    def _write_data(self, outfile, path, encrypt):
+        self._write_raw_data(self, outfile, path, encrypt)
 
     def _write_raw_data(self, outfile, path, encrypt):
         if encrypt:
@@ -54,17 +115,26 @@ class AbstractBlock(object):
         
     def generate_file_name(self):
         return self.name + ".dmp"
+    
+    def __repr__(self):
+        return "[" + self.name + "]"
 
 
 class BlockDefaultV5(AbstractBlock):
-    def _read_header(self, resource):
+    def _read_header(self, resource, decrypt):
         # Should be reversed for old format resources
-        self.name = util.crypt(self._read_name(resource), self.crypt_value)
-        self.size = util.crypt(self._read_size(resource), self.crypt_value)
+        self.name = self._read_name(resource, decrypt)
+        self.size = self._read_size(resource, decrypt)
 
-    def _write_header(self, outfile, path):
-        outfile.write(util.crypt(self.name, self.crypt_value))
-        outfile.write(util.crypt_value(util.int_to_str(self.size, util.BE), self.crypt_value))
+    def _write_header(self, outfile, path, encrypt):
+        name = self.name
+        if encrypt:
+            name = util.crypt(name, self.crypt_value)
+        outfile.write(name)
+        size = util.int_to_str(self.size, util.BE)
+        if encrypt:
+            size = util.crypt_value(size, self.crypt_value)
+        outfile.write(size)
 
 
 class BlockSoundV5(BlockDefaultV5):
@@ -72,31 +142,50 @@ class BlockSoundV5(BlockDefaultV5):
 
 
 class BlockGloballyIndexedV5(BlockDefaultV5):
-    def __init__(self, *args):
-        super(BlockGloballyIndexedV5, self).__init__(args)
+    def __init__(self, *args, **kwds):
+        super(BlockGloballyIndexedV5, self).__init__(*args, **kwds)
         self.index = None
+        self.is_unknown = False
     
     def load_from_resource(self, resource):
         location = resource.tell()
-        super(BlockIndexedV5, self).load_from_resource(resource)
-        self.index = control.global_index_map.get_index(self.name, location)
+        super(BlockGloballyIndexedV5, self).load_from_resource(resource)
+        try:
+            self.index = control.global_index_map.get_index(self.name, location)
+        except util.ScummPackerUnrecognisedIndexException, suie:
+            util.error("Block \"" 
+                       + str(self.name)
+                       + "\" at offset "
+                       + str(location)
+                       + " has no entry in the index file (.000). "
+                       + "It can not be re-packed or used in the game.")
+            self.is_unknown = True
+            self.index = control.unknown_blocks_counter.get_next_index(self.name)
         
     def generate_file_name(self):
-        return self.name + "_" + str(self.index).zfill(3) + ".dmp"
+        return (self.name 
+                + "_" 
+                + ("unk_" if self.is_unknown else "")
+                + str(self.index).zfill(3) + ".dmp")
+    
+    def __repr__(self):
+        
+        return "[" + self.name + ":" + ("unk_" if self.is_unknown else "") + str(self.index).zfill(3) + "]"
 
     
 class BlockContainerV5(BlockDefaultV5):
-    def __init__(self, *args):
-        super(BlockContainerV5, self).__init__(args)
+    def __init__(self, *args, **kwds):
+        super(BlockContainerV5, self).__init__(*args, **kwds)
         self.children = []
     
-    def _read_data(self, resource, start):
+    def _read_data(self, resource, start, decrypt):
+        global block_dispatcher
         end = start + self.size
         while resource.tell() < end:
-            block = BlockDispatcherV5.dispatch_next_block(resource)
-            block.loadFromResource(resource)
+            block = block_dispatcher.dispatch_next_block(resource)
+            block.load_from_resource(resource)
             self.append(block)
-            
+    
     def append(self, block):
         self.children.append(block)
     
@@ -116,26 +205,29 @@ class BlockContainerV5(BlockDefaultV5):
         
     def generate_file_name(self):
         return self.name
+    
+    def __repr__(self):
+        childstr = [str(c) for c in self.children]
+        return "[" + self.name + ", " + ", ".join(childstr) + "]"
 
 
-class BlockROOM(BlockContainerV5): # also globally indexed
-    def __init__(self, *args):
-        super(BlockContainerV5, self).__init__(args)
-        self.index = None
+class BlockROOMV5(BlockContainerV5, BlockGloballyIndexedV5): # also globally indexed
+    def __init__(self, *args, **kwds):
+        super(BlockROOMV5, self).__init__(*args, **kwds)
         self.script_types = frozenset(["ENCD", 
                                        "EXCD",
                                        "LSCR"])
         self.object_types = frozenset(["OBIM",
                                        "OBCD"])
         
-    def _read_data(self, resource, start):
-        self.index = control.global_index_map.get_index(self.name, start)
+    def _read_data(self, resource, start, decrypt):
+        global block_dispatcher
         end = start + self.size
         object_container = ObjectBlockContainer()
         script_container = ScriptBlockContainer()
         while resource.tell() < end:
-            block = BlockDispatcherV5.dispatch_next_block(resource)
-            block.loadFromResource(resource)
+            block = block_dispatcher.dispatch_next_block(resource)
+            block.load_from_resource(resource)
             if block.name in self.script_types:
                 script_container.append(block)
             elif block.name == "OBIM":
@@ -149,15 +241,9 @@ class BlockROOM(BlockContainerV5): # also globally indexed
                 self.append(block)
         self.append(object_container)
         self.append(script_container)
-
-    
-class BlockLFLF(BlockContainerV5):
-    #self.room_name
-    def generate_file_name(self):
-        return self.name + "_" + str(self.index).zfill(3) + "_" + self.room_name
     
     
-class BlockLOFF(BlockGloballyIndexedV5):
+class BlockLOFF(BlockDefaultV5):
     pass
 
 
@@ -177,16 +263,29 @@ class ScriptBlockContainer(object):
         
     def generate_file_name(self):
         return "scripts"
+    
+    def __repr__(self):
+        childstr = [str(c) for c in self.scripts]
+        return "[Scripts, " + ", ".join(childstr) + "]"
 
 
 class BlockLSCRV5(BlockDefaultV5):
-    def _read_data(self, resource, start):
-        self.script_id = util.crypt(util.str_to_int(resource.read(1)), self.crypt_value)
-        self.data = util.crypt(self._read_raw_data(resource, self.size - (resource.tell() - start)), self.crypt_value)
+    def _read_data(self, resource, start, decrypt):
+        script_id = resource.read(1)
+        if decrypt:
+            script_id = util.crypt(script_id, self.crypt_value)
+        self.script_id = util.str_to_int(script_id)
+        data = self._read_raw_data(resource, self.size - (resource.tell() - start))
+        if decrypt:
+            data = util.crypt(data, self.crypt_value)
+        self.data = data
         
-    def _write_data(self, outfile, path):
-        outfile.write(util.int_to_str(self.script_id, numBytes=1))
-        self._write_raw_data(self, outfile, path, False)
+    def _write_data(self, outfile, path, encrypt):
+        script_num = util.int_to_str(self.script_id, numBytes=1)
+        if encrypt:
+            script_num = util.crypt(script_num, self.crypt_value)
+        outfile.write(script_num)
+        self._write_raw_data(self, outfile, path, encrypt)
         
     def generate_file_name(self):
         return self.name + "_" + str(self.script_id).zfill(3) + ".dmp"
@@ -217,15 +316,19 @@ class ObjectBlockContainer(object):
     def generate_file_name(self):
         return "objects"
     
+    def __repr__(self):
+        childstr = ["obj_" + str(c) for c in self.objects.keys()]
+        return "[OBIM & OBCD, " + "[" + ", ".join(childstr) + "] " + "]"
+    
     
 class BlockOBIMV5(BlockContainerV5):
-    def _read_data(self, resource, start):
+    def _read_data(self, resource, start, decrypt):
         end = start + self.size
         block = BlockIMHDV5(self.block_name_length, self.crypt_value)
-        block.loadFromResource(resource)
+        block.load_from_resource(resource)
         self.obj_id = block.obj_id # maybe should handle header info better
         self.imhd = block
-        i = block.num_inn
+        i = block.num_imnn
         while i > 0:
             block = BlockContainerV5(self.block_name_length, self.crypt_value)
             block.load_from_resource(resource)
@@ -236,7 +339,7 @@ class BlockOBIMV5(BlockContainerV5):
         return self.obj_id
     
 class BlockIMHDV5(BlockDefaultV5):
-    def _read_data(self, resource, start):
+    def _read_data(self, resource, start, decrypt):
         """
         obj id       : 16le
         num imnn     : 16le
@@ -256,37 +359,42 @@ class BlockIMHDV5(BlockDefaultV5):
           y          : 16le signed
         """
 
-        values = struct.unpack("<3H2B5H", util.crypt(resource.read(18), self.crypt_value))
+        data = resource.read(16)
+        if decrypt:
+            data = util.crypt(data, self.crypt_value)
+        values = struct.unpack("<3H2B4H", data)
+        del data
         
         # Unpack the values 
         self.obj_id, self.num_imnn, self.num_zpnn, self.flags, self.unknown, \
             self.x, self.y, self.width, self.height = values
+        del values
 
     
 class BlockOBCDV5(BlockContainerV5):
-    def _read_data(self, resource, start):
+    def _read_data(self, resource, start, decrypt):
         end = start + self.size
         block = BlockCDHDV5(self.block_name_length, self.crypt_value)
-        block.loadFromResource(resource)
+        block.load_from_resource(resource)
         self.obj_id = block.obj_id # maybe should handle header info better
         self.cdhd = block
         
         block = BlockDefaultV5(self.block_name_length, self.crypt_value)
-        block.loadFromResource(resource)
+        block.load_from_resource(resource)
         self.verb = block
         
         block = BlockDefaultV5(self.block_name_length, self.crypt_value)
-        block.loadFromResource(resource)
+        block.load_from_resource(resource)
         self.obna = block
         
-        self.obj_name = self.obna.data.rstrip("\x00") # cheat
+        self.obj_name = self.obna.data[:-1].tostring() # cheat
     
     def generate_file_name(self):
         return self.obj_id
     
     
 class BlockCDHDV5(BlockDefaultV5):
-    def _read_data(self, resource, start):
+    def _read_data(self, resource, start, decrypt):
         """
           obj id    : 16le
           x         : 8
@@ -300,27 +408,77 @@ class BlockCDHDV5(BlockDefaultV5):
           actor dir : 8 (direction the actor will look at when standing in front
                          of the object)
         """
-        values = struct.unpack("<H6B2hB", util.crypt(resource.read(13), self.crypt_value))
+        data = resource.read(13)
+        if decrypt:
+            data = util.crypt(data, self.crypt_value)
+        values = struct.unpack("<H6B2hB", data)
+        del data
         
         # Unpack the values 
         self.obj_id, self.x, self.y, self.width, self.height, self.flags, \
             self.parent, self.walk_x, self.walk_y, self._actor_dir = values
+        del values
         
         
+class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
+    def _read_data(self, resource, start, decrypt):
+        global block_dispatcher
+        if self.size == 32:
+            self._read_raw_data(resource, self.size - (resource.tell() - start))
+        else:
+            end = start + self.size
+            while resource.tell() < end:
+                block = block_dispatcher.dispatch_next_block(resource)
+                block.load_from_resource(resource)
+                self.append(block)
+                
+    def save_to_file(self, path):
+        if self.size == 32:
+            self._write_raw_data(path, False)
+        else:
+            newpath = self._create_directory(path)
+            self._save_children(newpath)
+                
+    def generate_file_name(self):
+        name = (self.name 
+                + "_" 
+                + ("unk_" if self.is_unknown else "")
+                + str(self.index).zfill(3))
+        if self.size == 32:
+            return name + ".dmp"
+        else:
+            return name
+     
+        
+class BlockLFLFV5(BlockContainerV5, BlockGloballyIndexedV5):
+    #self.room_name
+##    def generate_file_name(self):
+##        return self.name + "_" + str(self.index).zfill(3) + "_" + self.room_name
+    def generate_file_name(self):
+        return (self.name 
+                + "_" 
+                + ("unk_" if self.is_unknown else "")
+                + str(self.index).zfill(3))
+    
+class BlockLECFV5(BlockContainerV5):
+    def __repr__(self):
+        childstr = [str(c) for c in self.children]
+        return "[" + self.name + ", " + ", \n".join(childstr) + "]"
+    
 class AbstractBlockDispatcher(object):
     CRYPT_VALUE = None
     BLOCK_NAME_LENGTH = None
     BLOCK_MAP = None
     
-    def dispatch_next_block(self, resource, path):
+    def dispatch_next_block(self, resource):
         assert type(resource) is file
         block_name = resource.read(self.BLOCK_NAME_LENGTH)
         if not self.CRYPT_VALUE is None:
-            block_name = decrypt(block_name)
+            block_name = util.crypt(block_name, self.CRYPT_VALUE)
         if not block_name in self.BLOCK_MAP:
             block_type = BlockDefaultV5
         else:
-            block_type = self.BLOCK_MAP(block_name)
+            block_type = self.BLOCK_MAP[block_name]
         block = block_type(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
         resource.seek(-self.BLOCK_NAME_LENGTH, os.SEEK_CUR)
         return block
@@ -331,26 +489,26 @@ class BlockDispatcherV5(AbstractBlockDispatcher):
     BLOCK_NAME_LENGTH = 4
     BLOCK_MAP = {
         # Container blocks
-        "LFLF" : BlockLFLF,
-        "ROOM" : BlockROOM, # also indexed
-        "RMIM" : BlockRMIM,
-        "SOUN" : BlockSOUN, # also sound, kind of
-        "OBIM" : BlockOBIM,
-        "OBCD" : BlockOBCD,
-        "LECF" : BlockLECF,
+        "LFLF" : BlockLFLFV5,
+        "ROOM" : BlockROOMV5, # also indexed
+        "RMIM" : BlockContainerV5,
+        "SOUN" : BlockSOUNV5, # also sound, kind of
+        "OBIM" : BlockOBIMV5,
+        "OBCD" : BlockOBCDV5,
+        "LECF" : BlockLECFV5,
         
         # Sound blocks
-        "SOU " : BlockSOU, # also container, except for MI1CD
+        "SOU " : BlockSoundV5, # also container, except for MI1CD
         "ROL " : BlockSoundV5,
         "SPK " : BlockSoundV5,
         "ADL " : BlockSoundV5,
         "SBL " : BlockSoundV5,
         
         # Globally indexed blocks
-        "COST" : BlockIndexed,
-        "CHAR" : BlockIndexed,
-        "SCRP" : BlockIndexed,
-        "SOUN" : BlockIndexed,
+        "COST" : BlockGloballyIndexedV5,
+        "CHAR" : BlockGloballyIndexedV5,
+        "SCRP" : BlockGloballyIndexedV5,
+        "SOUN" : BlockGloballyIndexedV5,
         
         # Other special blocks
         "IMHD" : BlockIMHDV5,
@@ -360,12 +518,18 @@ class BlockDispatcherV5(AbstractBlockDispatcher):
     }
 
 
-class IndexFileReader(AbstractBlockReader):
-    def dispatch_next_block(self, resource, path):
-        pass
+#class IndexFileReader(AbstractBlockReader):
+#    def dispatch_next_block(self, resource, path):
+#        pass
     
     
 def __test():
-    pass
+    global block_dispatcher
+    block_dispatcher = BlockDispatcherV5()
+    resfile = file("MONKEY.001", "rb")
+    block = BlockLECFV5(4, 0x69)
+    block.load_from_resource(resfile)
+    print block
+    resfile.close()
     
 if __name__ == "__main__": __test()

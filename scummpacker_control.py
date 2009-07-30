@@ -1,4 +1,4 @@
-import scummbler_util as util
+import scummpacker_util as util
 
 class IndexCounter(object):
     def __init__(self, *args):
@@ -10,10 +10,27 @@ class IndexCounter(object):
         for k in self.index_map:
             self.index_map[K] = 0
     
-    def increment_index(self, index_name):
-        self.index_map[index_name] = self.index_map[index_name] + 1
+##    def increment_index(self, index_name):
+##        if not index_name in self.index_map:
+##            raise util.ScummPackerException("Unrecognised block \"" 
+##                                            + str(index_name) 
+##                                            + "\" tried to increment a counted index.")
+##        self.index_map[index_name] = self.index_map[index_name] + 1
         
-    def get_index(self, index_name):
+##    def get_index(self, index_name):
+##        if not index_name in self.index_map:
+##            raise util.ScummPackerException("Unrecognised block \"" 
+##                                            + str(index_name) 
+##                                            + "\" tried to retrieve a counted index.")
+##        return self.index_map[index_name]
+
+    
+    def get_next_index(self, index_name):
+        if not index_name in self.index_map:
+            raise util.ScummPackerException("Unrecognised block \"" 
+                                            + str(index_name) 
+                                            + "\" tried to retrieve a counted index.")
+        self.index_map[index_name] = self.index_map[index_name] + 1
         return self.index_map[index_name]
         
 
@@ -40,6 +57,16 @@ class IndexMappingContainer(object):
         self.index_map[map_name][key] = index
         
     def get_index(self, map_name, key):
+        if not map_name in self.index_map:
+            raise util.ScummPackerException("Unrecognised block \"" 
+                                            + str(map_name) 
+                                            + "\" tried to retrieve a global index.")
+        if not key in self.index_map[map_name]:
+            raise util.ScummPackerUnrecognisedIndexException("Block \"" 
+                                            + str(map_name) 
+                                            + "\" tried to retrieve an unrecognised global index \""
+                                            + str(key)
+                                            + "\".")
         return self.index_map[map_name][key]
     
 global_index_map = None
@@ -49,4 +76,14 @@ global_index_map = IndexMappingContainer(
     "CHAR",
     "SCRP",
     "SOUN",
+    "LFLF"
+)
+
+unknown_blocks_counter = IndexCounter(
+    "ROOM",
+    "COST",
+    "CHAR",
+    "SCRP",
+    "SOUN",
+    "LFLF"
 )

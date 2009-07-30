@@ -25,8 +25,8 @@ def crypt(in_val, crypt_val):
         return in_val
     if type(in_val) is str:
         outString = ''
-        for c in inString:
-            outString += c ^ crypt_val
+        for c in in_val:
+            outString += chr(ord(c) ^ crypt_val)
         return outString
     elif type(in_val) is array.ArrayType:
         for i, byte in enumerate(in_val):
@@ -56,6 +56,8 @@ def int_to_str(in_val, numBytes=4, is_BE=False):
     return out_val.tostring()
 
 
-class ScummPackerException(ApplicationException):
+class ScummPackerException(Exception):
     pass
 
+class ScummPackerUnrecognisedIndexException(Exception):
+    pass
