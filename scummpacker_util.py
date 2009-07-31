@@ -36,15 +36,17 @@ def crypt(in_val, crypt_val):
 
 LE = False
 BE = True
-def str_to_int(in_val, is_BE=False):
+def str_to_int(in_val, is_BE=False, crypt_val=None):
     out_val = 0
+    if crypt_val != None:
+        in_val = crypt(in_val, crypt_val)
     if is_BE:
         in_val = reversed(in_val)
     for i, c in enumerate(in_val):
         out_val += ord(c) << 8*i
     return out_val
 
-def int_to_str(in_val, numBytes=4, is_BE=False):
+def int_to_str(in_val, numBytes=4, is_BE=False, crypt_val=None):
     out_val = array.array('B')
     i = 0
     while i < numBytes:
@@ -53,6 +55,8 @@ def int_to_str(in_val, numBytes=4, is_BE=False):
         i += 1
     if is_BE:
         out_val.reverse()
+    if crypt_val != None:
+        out_val = crypt(out_val, crypt_val)
     return out_val.tostring()
 
 

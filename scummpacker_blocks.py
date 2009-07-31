@@ -1,5 +1,6 @@
 import array
 import os
+import re
 import struct
 import scummpacker_control as control
 import scummpacker_util as util
@@ -105,7 +106,7 @@ class AbstractBlock(object):
         raise NotImplementedError("This method must be overriden by a concrete class.")
 
     def _write_data(self, outfile, path, encrypt):
-        self._write_raw_data(self, outfile, path, encrypt)
+        self._write_raw_data(outfile, path, encrypt)
 
     def _write_raw_data(self, outfile, path, encrypt):
         if encrypt:
@@ -127,13 +128,8 @@ class BlockDefaultV5(AbstractBlock):
         self.size = self._read_size(resource, decrypt)
 
     def _write_header(self, outfile, path, encrypt):
-        name = self.name
-        if encrypt:
-            name = util.crypt(name, self.crypt_value)
-        outfile.write(name)
-        size = util.int_to_str(self.size, util.BE)
-        if encrypt:
-            size = util.crypt_value(size, self.crypt_value)
+        outfile.write((util.crypt(self.name, self.crypt_value) if encrypt else self.name))
+        size = util.int_to_str(self.size, util.BE, crypt_val=(self.crypt_value if encrypt else None))
         outfile.write(size)
 
 
@@ -211,7 +207,7 @@ class BlockContainerV5(BlockDefaultV5):
         return "[" + self.name + ", " + ", ".join(childstr) + "]"
 
 
-class BlockROOMV5(BlockContainerV5, BlockGloballyIndexedV5): # also globally indexed
+class BlockROOMV5(BlockContainerV5): # also globally indexed
     def __init__(self, *args, **kwds):
         super(BlockROOMV5, self).__init__(*args, **kwds)
         self.script_types = frozenset(["ENCD", 
@@ -242,10 +238,22 @@ class BlockROOMV5(BlockContainerV5, BlockGloballyIndexedV5): # also globally ind
         self.append(object_container)
         self.append(script_container)
     
-    
-class BlockLOFF(BlockDefaultV5):
-    pass
+class BlockLOFFV5(BlockDefaultV5):
+    def _read_data(self, resource, start, decrypt):
+        num_rooms = util.str_to_int(resource.read(1), 
+                                    crypt_val=(self.crypt_value if decrypt else None))
 
+        for i in xrange(num_rooms):
+            room_no = util.str_to_int(resource.read(1),
+                                      crypt_val=(self.crypt_value if decrypt else None))
+            room_offset = util.str_to_int(resource.read(4),
+                                      crypt_val=(self.crypt_value if decrypt else None))
+            
+            control.global_index_map.map_index("LFLF", room_offset - self.block_name_length - 4, room_no)
+            control.global_index_map.map_index("ROOM", room_offset, room_no)
+
+    def save_to_file(self, path):
+        pass
 
 class ScriptBlockContainer(object):
     def __init__(self):
@@ -285,7 +293,7 @@ class BlockLSCRV5(BlockDefaultV5):
         if encrypt:
             script_num = util.crypt(script_num, self.crypt_value)
         outfile.write(script_num)
-        self._write_raw_data(self, outfile, path, encrypt)
+        self._write_raw_data(outfile, path, encrypt)
         
     def generate_file_name(self):
         return self.name + "_" + str(self.script_id).zfill(3) + ".dmp"
@@ -336,7 +344,7 @@ class BlockOBIMV5(BlockContainerV5):
             i -= 1
     
     def generate_file_name(self):
-        return self.obj_id
+        return str(self.obj_id)
     
 class BlockIMHDV5(BlockDefaultV5):
     def _read_data(self, resource, start, decrypt):
@@ -390,7 +398,7 @@ class BlockOBCDV5(BlockContainerV5):
         self.obj_name = self.obna.data[:-1].tostring() # cheat
     
     def generate_file_name(self):
-        return self.obj_id
+        return str(self.obj_id)
     
     
 class BlockCDHDV5(BlockDefaultV5):
@@ -454,51 +462,79 @@ class BlockLFLFV5(BlockContainerV5, BlockGloballyIndexedV5):
     #self.room_name
 ##    def generate_file_name(self):
 ##        return self.name + "_" + str(self.index).zfill(3) + "_" + self.room_name
+    
+##    def load_from_resource(self, resource):
+##        location = resource.tell()
+##        super(BlockGloballyIndexedV5, self).load_from_resource(resource)
+##        self.is_unknown = self.children[0].is_unknown
+##        self.index = self.children[0].index
+
+    
     def generate_file_name(self):
         return (self.name 
                 + "_" 
                 + ("unk_" if self.is_unknown else "")
                 + str(self.index).zfill(3))
     
+    def __repr__(self):
+        childstr = [str(c) for c in self.children]
+        return ("[" 
+                + self.name 
+                + ":" 
+                + ("unk_" if self.is_unknown else "")
+                + str(self.index).zfill(3) 
+                + ", "
+                + ", ".join(childstr)
+                + "]")
+    
+    
 class BlockLECFV5(BlockContainerV5):
     def __repr__(self):
         childstr = [str(c) for c in self.children]
-        return "[" + self.name + ", " + ", \n".join(childstr) + "]"
-    
+        return "[" + self.name + ", " + ", \n".join(childstr) + "]" 
+
 class AbstractBlockDispatcher(object):
     CRYPT_VALUE = None
     BLOCK_NAME_LENGTH = None
     BLOCK_MAP = None
+    DEFAULT_BLOCK = None
     
     def dispatch_next_block(self, resource):
         assert type(resource) is file
         block_name = resource.read(self.BLOCK_NAME_LENGTH)
         if not self.CRYPT_VALUE is None:
             block_name = util.crypt(block_name, self.CRYPT_VALUE)
-        if not block_name in self.BLOCK_MAP:
-            block_type = BlockDefaultV5
+        if block_name in self.BLOCK_MAP:
+            block_type = self.BLOCK_MAP[block_name]            
+        elif self._is_quirky_block(block_name):
+            block_type = self._dispatch_quirky_block(block_name)
         else:
-            block_type = self.BLOCK_MAP[block_name]
+            block_type = self.DEFAULT_BLOCK
         block = block_type(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
         resource.seek(-self.BLOCK_NAME_LENGTH, os.SEEK_CUR)
         return block
 
+    def _is_quirky_block(self, block_name):
+        return False
+    
+    def _dispatch_quirky_block(self, block_name):
+        raise NotImplementedError("This method must be overriden by a concrete class if required.")
     
 class BlockDispatcherV5(AbstractBlockDispatcher):
     CRYPT_VALUE = 0x69
     BLOCK_NAME_LENGTH = 4
     BLOCK_MAP = {
         # Container blocks
-        "LFLF" : BlockLFLFV5,
-        "ROOM" : BlockROOMV5, # also indexed
+        "LFLF" : BlockLFLFV5, # also indexed
+        "ROOM" : BlockROOMV5, # also indexed (kind of)
         "RMIM" : BlockContainerV5,
-        "SOUN" : BlockSOUNV5, # also sound, kind of
+        "SOUN" : BlockSOUNV5, # also sound (kind of)
         "OBIM" : BlockOBIMV5,
         "OBCD" : BlockOBCDV5,
         "LECF" : BlockLECFV5,
         
         # Sound blocks
-        "SOU " : BlockSoundV5, # also container, except for MI1CD
+        "SOU " : BlockSoundV5, # also container?, except for MI1CD?
         "ROL " : BlockSoundV5,
         "SPK " : BlockSoundV5,
         "ADL " : BlockSoundV5,
@@ -513,10 +549,24 @@ class BlockDispatcherV5(AbstractBlockDispatcher):
         # Other special blocks
         "IMHD" : BlockIMHDV5,
         "LSCR" : BlockLSCRV5,
-        "LOFF" : BlockLOFF
+        "LOFF" : BlockLOFFV5
         
     }
-
+    DEFAULT_BLOCK = BlockDefaultV5
+    
+    def _is_quirky_block(self, block_name):
+        re_pattern = re.compile("IM[0-9]{2}")
+        if re_pattern.match(block_name) != None:
+            return True
+        return False
+    
+    def _dispatch_quirky_block(self, block_name):
+        re_pattern = re.compile("IM[0-9]{2}")
+        if re_pattern.match(block_name) != None:
+            return BlockContainerV5
+        raise util.ScummPackerException("Tried to dispatch apparently known quirky block \"" 
+                                        + block_name 
+                                        + "\", but I don't know what to do with it!")
 
 #class IndexFileReader(AbstractBlockReader):
 #    def dispatch_next_block(self, resource, path):
@@ -531,5 +581,7 @@ def __test():
     block.load_from_resource(resfile)
     print block
     resfile.close()
+    
+    block.save_to_file(os.getcwd())
     
 if __name__ == "__main__": __test()

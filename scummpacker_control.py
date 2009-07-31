@@ -54,9 +54,19 @@ class IndexMappingContainer(object):
             self.index_map[k].clear()
             
     def map_index(self, map_name, key, index):
+        self.__setitem__(map_name, key, index)
+        
+    def __setitem__(self, map_name, key, index):
+        if not map_name in self.index_map:
+            raise util.ScummPackerException("Unrecognised block \"" 
+                                            + str(map_name) 
+                                            + "\" tried to store a global index.")
         self.index_map[map_name][key] = index
         
     def get_index(self, map_name, key):
+        return self.__getitem__(map_name, key)
+    
+    def __getitem__(self, map_name, key):
         if not map_name in self.index_map:
             raise util.ScummPackerException("Unrecognised block \"" 
                                             + str(map_name) 
