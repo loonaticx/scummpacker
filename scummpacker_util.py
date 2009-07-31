@@ -43,14 +43,14 @@ def str_to_int(in_val, is_BE=False, crypt_val=None):
     if is_BE:
         in_val = reversed(in_val)
     for i, c in enumerate(in_val):
-        out_val += ord(c) << 8*i
+        out_val += ord(c) << (i * 8)
     return out_val
 
 def int_to_str(in_val, numBytes=4, is_BE=False, crypt_val=None):
     out_val = array.array('B')
     i = 0
     while i < numBytes:
-        b = (in_val >> i) & 0xFF 
+        b = (in_val >> (i * 8)) & 0xFF 
         out_val.append(b)
         i += 1
     if is_BE:

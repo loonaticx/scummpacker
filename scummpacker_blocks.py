@@ -128,7 +128,8 @@ class BlockDefaultV5(AbstractBlock):
         self.size = self._read_size(resource, decrypt)
 
     def _write_header(self, outfile, path, encrypt):
-        outfile.write((util.crypt(self.name, self.crypt_value) if encrypt else self.name))
+        name = util.crypt(self.name, self.crypt_value) if encrypt else self.name
+        outfile.write(name)
         size = util.int_to_str(self.size, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
         outfile.write(size)
 
@@ -468,7 +469,13 @@ class BlockLFLFV5(BlockContainerV5, BlockGloballyIndexedV5):
 ##        super(BlockGloballyIndexedV5, self).load_from_resource(resource)
 ##        self.is_unknown = self.children[0].is_unknown
 ##        self.index = self.children[0].index
-
+    def save_to_file(self, path):
+        util.information("Saving block " 
+                         + self.name 
+                         + ":" 
+                         + ("unk_" if self.is_unknown else "")
+                         + str(self.index).zfill(3))
+        super(BlockLFLFV5, self).save_to_file(path)
     
     def generate_file_name(self):
         return (self.name 
