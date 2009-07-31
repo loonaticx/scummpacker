@@ -88,7 +88,7 @@ class AbstractBlock(object):
         size = resource.read(4)
         if decrypt:
             size = util.crypt(size, self.crypt_value)
-        return util.str_to_int(size, util.BE)
+        return util.str_to_int(size, is_BE=util.BE)
     
     def _read_raw_data(self, resource, size):
         data = array.array('B')
@@ -129,7 +129,7 @@ class BlockDefaultV5(AbstractBlock):
 
     def _write_header(self, outfile, path, encrypt):
         outfile.write((util.crypt(self.name, self.crypt_value) if encrypt else self.name))
-        size = util.int_to_str(self.size, util.BE, crypt_val=(self.crypt_value if encrypt else None))
+        size = util.int_to_str(self.size, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
         outfile.write(size)
 
 
