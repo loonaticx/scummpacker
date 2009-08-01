@@ -135,8 +135,21 @@ class BlockDefaultV5(AbstractBlock):
 
 
 class BlockSoundV5(BlockDefaultV5):
-    pass
-
+    """ Sound blocks store incorrect block size (it doesn't include the SOU/ADL/SBL header size)"""
+    def _read_size(self, resource, decrypt):
+        size = resource.read(4)
+        if decrypt:
+            size = util.crypt(size, self.crypt_value)
+        return util.str_to_int(size, is_BE=util.BE) + 8
+    
+    def _write_header(self, outfile, path, encrypt):
+        name = util.crypt(self.name, self.crypt_value) if encrypt else self.name
+        outfile.write(name)
+        size = util.int_to_str(self.size - 8, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
+        outfile.write(size)
+    
+    def generate_file_name(self):
+        return self.name.rstrip() + ".dmp"
 
 class BlockGloballyIndexedV5(BlockDefaultV5):
     def __init__(self, *args, **kwds):
@@ -207,6 +220,9 @@ class BlockContainerV5(BlockDefaultV5):
         childstr = [str(c) for c in self.children]
         return "[" + self.name + ", " + ", ".join(childstr) + "]"
 
+class BlockSOUV5(BlockContainerV5, BlockSoundV5):
+    def generate_file_name(self):
+        return self.name.rstrip()
 
 class BlockROOMV5(BlockContainerV5): # also globally indexed
     def __init__(self, *args, **kwds):
@@ -433,7 +449,7 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
     def _read_data(self, resource, start, decrypt):
         global block_dispatcher
         if self.size == 32:
-            self._read_raw_data(resource, self.size - (resource.tell() - start))
+            self.data = self._read_raw_data(resource, self.size - (resource.tell() - start))
         else:
             end = start + self.size
             while resource.tell() < end:
@@ -443,7 +459,10 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
                 
     def save_to_file(self, path):
         if self.size == 32:
-            self._write_raw_data(path, False)
+            outfile = file(os.path.join(path, self.generate_file_name()), 'wb')
+            self._write_header(outfile, path, False)
+            self._write_raw_data(outfile, path, False)
+            outfile.close()
         else:
             newpath = self._create_directory(path)
             self._save_children(newpath)
@@ -541,7 +560,7 @@ class BlockDispatcherV5(AbstractBlockDispatcher):
         "LECF" : BlockLECFV5,
         
         # Sound blocks
-        "SOU " : BlockSoundV5, # also container?, except for MI1CD?
+        "SOU " : BlockSOUV5,
         "ROL " : BlockSoundV5,
         "SPK " : BlockSoundV5,
         "ADL " : BlockSoundV5,
@@ -551,7 +570,7 @@ class BlockDispatcherV5(AbstractBlockDispatcher):
         "COST" : BlockGloballyIndexedV5,
         "CHAR" : BlockGloballyIndexedV5,
         "SCRP" : BlockGloballyIndexedV5,
-        "SOUN" : BlockGloballyIndexedV5,
+        "SOUN" : BlockSOUNV5,
         
         # Other special blocks
         "IMHD" : BlockIMHDV5,
