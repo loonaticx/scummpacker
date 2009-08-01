@@ -86,7 +86,8 @@ global_index_map = IndexMappingContainer(
     "CHAR",
     "SCRP",
     "SOUN",
-    "LFLF"
+    "LFLF",
+    "RNAM"
 )
 
 unknown_blocks_counter = IndexCounter(

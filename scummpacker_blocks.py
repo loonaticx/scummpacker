@@ -2,6 +2,7 @@ import array
 import os
 import re
 import struct
+import xml.etree.ElementTree as et
 import scummpacker_control as control
 import scummpacker_util as util
 
@@ -63,7 +64,7 @@ class AbstractBlock(object):
         self.block_name_length = block_name_length
         self.crypt_value = crypt_value
     
-    def load_from_resource(self, resource):
+    def load_from_resource(self, resource, room_start=0):
         start = resource.tell()
         self._read_header(resource, True)
         self._read_data(resource, start, True)
@@ -157,11 +158,14 @@ class BlockGloballyIndexedV5(BlockDefaultV5):
         self.index = None
         self.is_unknown = False
     
-    def load_from_resource(self, resource):
+    def load_from_resource(self, resource, room_start=0):
         location = resource.tell()
         super(BlockGloballyIndexedV5, self).load_from_resource(resource)
         try:
-            self.index = control.global_index_map.get_index(self.name, location)
+            room_num = control.global_index_map.get_index("LFLF", room_start)
+            room_offset = control.global_index_map.get_index("ROOM", room_num) # HACK
+            self.index = control.global_index_map.get_index(self.name, 
+                                                             (room_num, location - room_offset))
         except util.ScummPackerUnrecognisedIndexException, suie:
             util.error("Block \"" 
                        + str(self.name)
@@ -193,7 +197,7 @@ class BlockContainerV5(BlockDefaultV5):
         end = start + self.size
         while resource.tell() < end:
             block = block_dispatcher.dispatch_next_block(resource)
-            block.load_from_resource(resource)
+            block.load_from_resource(resource, start)
             self.append(block)
     
     def append(self, block):
@@ -267,7 +271,7 @@ class BlockLOFFV5(BlockDefaultV5):
                                       crypt_val=(self.crypt_value if decrypt else None))
             
             control.global_index_map.map_index("LFLF", room_offset - self.block_name_length - 4, room_no)
-            control.global_index_map.map_index("ROOM", room_offset, room_no)
+            control.global_index_map.map_index("ROOM", room_no, room_offset) # HACK
 
     def save_to_file(self, path):
         pass
@@ -331,12 +335,45 @@ class ObjectBlockContainer(object):
         self.objects[block.obj_id][0] = block
         
     def save_to_file(self, path):
-        newpath = os.path.join(path, self.generate_file_name())
-        if not os.path.isdir(newpath):
-            os.mkdir(newpath) # throws an exception if can't create dir
+        objects_path = os.path.join(path, self.generate_file_name())
+        if not os.path.isdir(objects_path):
+            os.mkdir(objects_path) # throws an exception if can't create dir
         for objimage, objcode in self.objects.values():
+            newpath = os.path.join(objects_path, str(objcode.obj_id) + "_" + util.discard_invalid_chars(objcode.obj_name))
+            if not os.path.isdir(newpath):
+                os.mkdir(newpath) # throws an exception if can't create dir
             objimage.save_to_file(newpath)
             objcode.save_to_file(newpath)
+            self._save_header_to_xml(newpath, objimage, objcode)
+
+    def _save_header_to_xml(self, path, objimage, objcode):
+        # Save the joined header information as XML
+        root = et.Element("object")
+    
+        shared = et.SubElement(root, "shared")
+        et.SubElement(shared, "name").text = util.escape_invalid_chars(objcode.obj_name)
+        et.SubElement(shared, "id").text = str(objcode.obj_id)
+        et.SubElement(shared, "x").text = str(objcode.cdhd.x)
+        et.SubElement(shared, "y").text = str(objcode.cdhd.y)
+        et.SubElement(shared, "width").text = str(objcode.cdhd.width)
+        et.SubElement(shared, "height").text = str(objcode.cdhd.height)
+        
+        # OBIM
+        obim = et.SubElement(root, "image")
+        et.SubElement(obim, "num_images").text = str(objimage.imhd.num_imnn)
+        et.SubElement(obim, "num_zplanes").text = str(objimage.imhd.num_zpnn)
+        et.SubElement(obim, "flags").text = str(objimage.imhd.flags)
+        et.SubElement(obim, "unknown").text = str(objimage.imhd.unknown)
+        
+        # OBCD
+        obcd = et.SubElement(root, "code")
+        et.SubElement(obcd, "flags").text = str(objcode.cdhd.flags)
+        et.SubElement(obcd, "parent").text = str(objcode.cdhd.parent)
+        et.SubElement(obcd, "walk_x").text = str(objcode.cdhd.walk_x)
+        et.SubElement(obcd, "walk_y").text = str(objcode.cdhd.walk_y)
+        et.SubElement(obcd, "actor_dir").text = str(objcode.cdhd.actor_dir)
+
+        et.ElementTree(root).write(os.path.join(path, "header.xml"))
         
     def generate_file_name(self):
         return "objects"
@@ -361,7 +398,7 @@ class BlockOBIMV5(BlockContainerV5):
             i -= 1
     
     def generate_file_name(self):
-        return str(self.obj_id)
+        return ""
     
 class BlockIMHDV5(BlockDefaultV5):
     def _read_data(self, resource, start, decrypt):
@@ -394,6 +431,9 @@ class BlockIMHDV5(BlockDefaultV5):
         self.obj_id, self.num_imnn, self.num_zpnn, self.flags, self.unknown, \
             self.x, self.y, self.width, self.height = values
         del values
+        
+    def save_to_file(self, path):
+        pass
 
     
 class BlockOBCDV5(BlockContainerV5):
@@ -414,8 +454,11 @@ class BlockOBCDV5(BlockContainerV5):
         
         self.obj_name = self.obna.data[:-1].tostring() # cheat
     
+    def save_to_file(self, path):
+        self.verb.save_to_file(path)
+        
     def generate_file_name(self):
-        return str(self.obj_id)
+        return str(self.obj_id) + "_" + self.obj_name
     
     
 class BlockCDHDV5(BlockDefaultV5):
@@ -441,7 +484,7 @@ class BlockCDHDV5(BlockDefaultV5):
         
         # Unpack the values 
         self.obj_id, self.x, self.y, self.width, self.height, self.flags, \
-            self.parent, self.walk_x, self.walk_y, self._actor_dir = values
+            self.parent, self.walk_x, self.walk_y, self.actor_dir = values
         del values
         
         
@@ -479,15 +522,23 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
      
         
 class BlockLFLFV5(BlockContainerV5, BlockGloballyIndexedV5):
-    #self.room_name
-##    def generate_file_name(self):
-##        return self.name + "_" + str(self.index).zfill(3) + "_" + self.room_name
+    def load_from_resource(self, resource, room_start=0):
+        location = resource.tell()
+        #super(BlockGloballyIndexedV5, self).load_from_resource(resource, location)
+        self._read_header(resource, True)
+        self._read_data(resource, location, True)
+        try:
+            self.index = control.global_index_map.get_index(self.name, location)
+        except util.ScummPackerUnrecognisedIndexException, suie:
+            util.error("Block \"" 
+                       + str(self.name)
+                       + "\" at offset "
+                       + str(location)
+                       + " has no entry in the index file (.000). "
+                       + "It can not be re-packed or used in the game.")
+            self.is_unknown = True
+            self.index = control.unknown_blocks_counter.get_next_index(self.name)    
     
-##    def load_from_resource(self, resource):
-##        location = resource.tell()
-##        super(BlockGloballyIndexedV5, self).load_from_resource(resource)
-##        self.is_unknown = self.children[0].is_unknown
-##        self.index = self.children[0].index
     def save_to_file(self, path):
         util.information("Saving block " 
                          + self.name 
@@ -547,6 +598,7 @@ class AbstractBlockDispatcher(object):
         raise NotImplementedError("This method must be overriden by a concrete class if required.")
     
 class BlockDispatcherV5(AbstractBlockDispatcher):
+    
     CRYPT_VALUE = 0x69
     BLOCK_NAME_LENGTH = 4
     BLOCK_MAP = {
@@ -594,13 +646,123 @@ class BlockDispatcherV5(AbstractBlockDispatcher):
                                         + block_name 
                                         + "\", but I don't know what to do with it!")
 
-#class IndexFileReader(AbstractBlockReader):
-#    def dispatch_next_block(self, resource, path):
-#        pass
+
+class BlockRNAMV5(BlockDefaultV5):
+    def _read_data(self, resource, start, decrypt):
+        end = start + self.size
+        while resource.tell() < end:
+            room_no = util.str_to_int(resource.read(1), crypt_val=(self.crypt_value if decrypt else None))
+            if room_no == 0: # end of list marked by 0x00
+                break
+            room_name = resource.read(9)
+            if decrypt:
+                room_name = util.crypt(room_name, self.crypt_value)
+            control.global_index_map.map_index(self.name, room_no, room_name)
+            
+    def save_to_file(self, path):
+        pass
+        
+
+class BlockMAXSV5(BlockDefaultV5):
+    def _read_data(self, resource, start, decrypt):
+        """
+        Block Name         (4 bytes)
+        Block Size         (4 bytes BE)
+        Variables          (2 bytes)
+        Unknown            (2 bytes)
+        Bit Variables      (2 bytes)
+        Local Objects      (2 bytes)
+        New Names?         (2 bytes)
+        Character Sets     (2 bytes)
+        Verbs?             (2 bytes)
+        Array?             (2 bytes)
+        Inventory Objects  (2 bytes)
+        """
+        data = resource.read(18)
+        if decrypt:
+            data = util.crypt(data, self.crypt_value)
+        values = struct.unpack("<9H", data)
+        del data
+        
+        self.num_vars, self.unknown_1, self.bit_vars, self.local_objects, \
+            self.unknown_2, self.char_sets, self.unknown_3, self.unknown_4, \
+            self.inventory_objects = values
+        
+    def save_to_file(self, path):
+        root = et.Element("object")
+        
+        et.SubElement(root, "variables").text = str(self.num_vars)
+        et.SubElement(root, "unknown_1").text = str(self.unknown_1)
+        et.SubElement(root, "bit_variables").text = str(self.bit_vars)
+        et.SubElement(root, "local_objects").text = str(self.local_objects)
+        et.SubElement(root, "unknown_2").text = str(self.unknown_2)
+        et.SubElement(root, "character_sets").text = str(self.char_sets)
+        et.SubElement(root, "unknown_3").text = str(self.unknown_3)
+        et.SubElement(root, "unknown_4").text = str(self.unknown_4)
+        et.SubElement(root, "inventory_objects").text = str(self.inventory_objects)
+        
+        et.ElementTree(root).write(os.path.join(path, "maxs.xml"))
+      
+class BlockIndexDirectoryV5(BlockDefaultV5):
+    DIR_TYPES = {
+        "DROO" : "ROOM",
+        "DSCR" : "SCRP",
+        "DSOU" : "SOUN",
+        "DCOS" : "COST",
+        "DCHR" : "CHAR"
+        #"DOBJ" : "OBCD"
+    }
     
+    def _read_data(self, resource, start, decrypt):
+        num_items = util.str_to_int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
+        room_nums = []
+        i = num_items
+        while i > 0:
+            room_no = util.str_to_int(resource.read(1), crypt_val=(self.crypt_value if decrypt else None))
+            room_nums.append(room_no)
+            i -= 1
+        offsets = []
+        i = num_items
+        while i > 0:
+            offset = util.str_to_int(resource.read(4), crypt_val=(self.crypt_value if decrypt else None))
+            offsets.append(offset)
+            i -= 1
+        
+        for i, key in enumerate(zip(room_nums, offsets)):
+            control.global_index_map.map_index(self.DIR_TYPES[self.name], key, i)
+            
+            
+class BlockDOBJV5(BlockDefaultV5):
+    pass
+
+class IndexBlockContainerV5(AbstractBlockDispatcher):
+    CRYPT_VALUE = 0x69
+    BLOCK_NAME_LENGTH = 4
+    BLOCK_MAP = {
+        "RNAM" : BlockRNAMV5,
+        "MAXS" : BlockMAXSV5,
+        "DROO" : BlockDefaultV5,
+        "DSCR" : BlockIndexDirectoryV5,
+        "DSOU" : BlockIndexDirectoryV5,
+        "DCOS" : BlockIndexDirectoryV5,
+        "DCHR" : BlockIndexDirectoryV5,
+        "DOBJ" : BlockDOBJV5
+    }
+    DEFAULT_BLOCK = BlockDefaultV5
+    
+    def load_from_resource(self, resource, room_start=0):
+        for i in xrange(8):
+            block = self.dispatch_next_block(resource)
+            block.load_from_resource(resource)
     
 def __test():
     global block_dispatcher
+    
+    dirfile = file("MONKEY.000", "rb")
+    dir_block = IndexBlockContainerV5()
+    dir_block.load_from_resource(dirfile)
+    dirfile.close()
+    
     block_dispatcher = BlockDispatcherV5()
     resfile = file("MONKEY.001", "rb")
     block = BlockLECFV5(4, 0x69)

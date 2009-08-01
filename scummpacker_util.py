@@ -1,8 +1,12 @@
 import array
+import string
+
+__valid_chars = frozenset("-_.() %s%s" % (string.ascii_letters, string.digits)) # for filenames
+
 # 0 = always display (errors)
 # 1 = warnings, verbose
 # 2 = debug
-TEXT_OUTPUT_LEVEL = 1
+TEXT_OUTPUT_LEVEL = 2
 def message(text, level=2):
     if level <= TEXT_OUTPUT_LEVEL:
         print(text)
@@ -59,6 +63,11 @@ def int_to_str(in_val, numBytes=4, is_BE=False, crypt_val=None):
         out_val = crypt(out_val, crypt_val)
     return out_val.tostring()
 
+def discard_invalid_chars(in_str):
+    return ''.join([c for c in in_str if c in __valid_chars])
+
+def escape_invalid_chars(in_str):
+    return ''.join([(c if c in __valid_chars else '\\x' + hex(ord(c))).lstrip("0x").rstrip("L") for c in in_str])
 
 class ScummPackerException(Exception):
     pass
