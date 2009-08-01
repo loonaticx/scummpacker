@@ -650,6 +650,7 @@ class BlockDispatcherV5(AbstractBlockDispatcher):
 class BlockRNAMV5(BlockDefaultV5):
     def _read_data(self, resource, start, decrypt):
         end = start + self.size
+        self.room_names = []
         while resource.tell() < end:
             room_no = util.str_to_int(resource.read(1), crypt_val=(self.crypt_value if decrypt else None))
             if room_no == 0: # end of list marked by 0x00
@@ -657,10 +658,19 @@ class BlockRNAMV5(BlockDefaultV5):
             room_name = resource.read(9)
             if decrypt:
                 room_name = util.crypt(room_name, self.crypt_value)
+            room_name = util.crypt(room_name, 0xFF).rstrip("\x00")
+            self.room_names.append((room_no, room_name))
             control.global_index_map.map_index(self.name, room_no, room_name)
             
     def save_to_file(self, path):
-        pass
+        root = et.Element("room_names")
+        
+        for room_no, room_name in self.room_names:
+            room = et.SubElement(root, "room")
+            et.SubElement(room, "id").text = str(room_no)
+            et.SubElement(room, "name").text = util.escape_invalid_chars(room_name)
+        
+        et.ElementTree(root).write(os.path.join(path, "roomnames.xml"))
         
 
 class BlockMAXSV5(BlockDefaultV5):
@@ -689,7 +699,7 @@ class BlockMAXSV5(BlockDefaultV5):
             self.inventory_objects = values
         
     def save_to_file(self, path):
-        root = et.Element("object")
+        root = et.Element("maximums")
         
         et.SubElement(root, "variables").text = str(self.num_vars)
         et.SubElement(root, "unknown_1").text = str(self.unknown_1)
@@ -731,6 +741,8 @@ class BlockIndexDirectoryV5(BlockDefaultV5):
         for i, key in enumerate(zip(room_nums, offsets)):
             control.global_index_map.map_index(self.DIR_TYPES[self.name], key, i)
             
+    def save_to_file(self, path):
+        pass
             
 class BlockDOBJV5(BlockDefaultV5):
     pass
@@ -751,17 +763,28 @@ class IndexBlockContainerV5(AbstractBlockDispatcher):
     DEFAULT_BLOCK = BlockDefaultV5
     
     def load_from_resource(self, resource, room_start=0):
+        self.children = []
         for i in xrange(8):
             block = self.dispatch_next_block(resource)
             block.load_from_resource(resource)
+            self.children.append(block)
+            
+    def save_to_file(self, path):
+        for c in self.children:
+            c.save_to_file(path)
+        
     
 def __test():
     global block_dispatcher
+    
+    outpath = os.getcwd()
     
     dirfile = file("MONKEY.000", "rb")
     dir_block = IndexBlockContainerV5()
     dir_block.load_from_resource(dirfile)
     dirfile.close()
+    
+    dir_block.save_to_file(outpath)
     
     block_dispatcher = BlockDispatcherV5()
     resfile = file("MONKEY.001", "rb")
@@ -770,6 +793,6 @@ def __test():
     print block
     resfile.close()
     
-    block.save_to_file(os.getcwd())
+    block.save_to_file(outpath)
     
 if __name__ == "__main__": __test()
