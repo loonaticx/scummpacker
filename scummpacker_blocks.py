@@ -69,14 +69,12 @@ class AbstractBlock(object):
         self._read_header(resource, True)
         self._read_data(resource, start, True)
 
-    def _read_header(self, resource):
+    def _read_header(self, resource, decrypt):
         # Different in old format resources
         raise NotImplementedError("This method must be overriden by a concrete class.")
 
     def _read_data(self, resource, start, decrypt):
-        data = self._read_raw_data(resource, self.size - (resource.tell() - start))
-        if decrypt:
-            data = util.crypt(data, self.crypt_value)
+        data = self._read_raw_data(resource, self.size - (resource.tell() - start), decrypt)
         self.data = data
         
     def _read_name(self, resource, decrypt):
@@ -91,9 +89,11 @@ class AbstractBlock(object):
             size = util.crypt(size, self.crypt_value)
         return util.str_to_int(size, is_BE=util.BE)
     
-    def _read_raw_data(self, resource, size):
+    def _read_raw_data(self, resource, size, decrypt):
         data = array.array('B')
         data.fromfile(resource, size)
+        if decrypt:
+            data = util.crypt(data, self.crypt_value)
         return data
 
     def save_to_file(self, path):
@@ -150,7 +150,7 @@ class BlockSoundV5(BlockDefaultV5):
         outfile.write(size)
     
     def generate_file_name(self):
-        return self.name.rstrip() + ".dmp"
+        return self.name.rstrip()
 
 class BlockGloballyIndexedV5(BlockDefaultV5):
     def __init__(self, *args, **kwds):
@@ -224,9 +224,44 @@ class BlockContainerV5(BlockDefaultV5):
         childstr = [str(c) for c in self.children]
         return "[" + self.name + ", " + ", ".join(childstr) + "]"
 
-class BlockSOUV5(BlockContainerV5, BlockSoundV5):
+class BlockMIDISoundV5(BlockSoundV5):
+    """ Saves the MDhd header data to a .mhd file, saves the rest of the block 
+    to a .mid file."""
+    MDHD_SIZE = 16
+    
+    def save_to_file(self, path):
+        outfile = file(os.path.join(path, self.generate_file_name() + ".mhd"), 'wb')
+        self._write_mdhd_header(outfile, path, False)
+        outfile.close()
+        outfile = file(os.path.join(path, self.generate_file_name() + ".mid"), 'wb')
+        self._write_data(outfile, path, False)
+        outfile.close()
+    
+    def _read_header(self, resource, decrypt):
+        super(BlockMIDISoundV5, self)._read_header(resource, decrypt)
+        self.mdhd_header = self._read_raw_data(resource, self.MDHD_SIZE, decrypt)
+    
+    def _write_mdhd_header(self, outfile, path, encrypt):
+        outfile.write(util.crypt(self.mdhd_header, (self.crypt_value if encrypt else None)))
+
+class BlockSOUV5(BlockSoundV5, BlockContainerV5):
+    pass
+
+class BlockSBLV5(BlockSoundV5):
+    def _read_data(self, resource, start, decrypt):
+        # SBL blocks have AUhd and AUdt headers instead of
+        #  "Creative Voice File".
+        # Skip AUhd/AUdt and just read the rest of the raw data,
+        #  we can regenerate the header later.
+        resource.seek(19, os.SEEK_CUR)
+        super(BlockSBLV5, self)._read_data(resource, start, decrypt)
+
+    def _write_header(self, outfile, path, encrypt):
+        # Will need to refactor this for saving to resource
+        outfile.write("Creative Voice File")
+
     def generate_file_name(self):
-        return self.name.rstrip()
+        return self.name.rstrip() + ".voc"
 
 class BlockROOMV5(BlockContainerV5): # also globally indexed
     def __init__(self, *args, **kwds):
@@ -304,10 +339,7 @@ class BlockLSCRV5(BlockDefaultV5):
         if decrypt:
             script_id = util.crypt(script_id, self.crypt_value)
         self.script_id = util.str_to_int(script_id)
-        data = self._read_raw_data(resource, self.size - (resource.tell() - start))
-        if decrypt:
-            data = util.crypt(data, self.crypt_value)
-        self.data = data
+        self.data = self._read_raw_data(resource, self.size - (resource.tell() - start), decrypt)
         
     def _write_data(self, outfile, path, encrypt):
         script_num = util.int_to_str(self.script_id, numBytes=1)
@@ -350,20 +382,22 @@ class ObjectBlockContainer(object):
         # Save the joined header information as XML
         root = et.Element("object")
     
-        shared = et.SubElement(root, "shared")
-        et.SubElement(shared, "name").text = util.escape_invalid_chars(objcode.obj_name)
-        et.SubElement(shared, "id").text = str(objcode.obj_id)
-        et.SubElement(shared, "x").text = str(objcode.cdhd.x)
-        et.SubElement(shared, "y").text = str(objcode.cdhd.y)
-        et.SubElement(shared, "width").text = str(objcode.cdhd.width)
-        et.SubElement(shared, "height").text = str(objcode.cdhd.height)
+        #shared = et.SubElement(root, "shared")
+        et.SubElement(root, "name").text = util.escape_invalid_chars(objcode.obj_name)
+        et.SubElement(root, "id").text = str(objcode.obj_id)
+        et.SubElement(root, "x").text = str(objcode.cdhd.x)
+        et.SubElement(root, "y").text = str(objcode.cdhd.y)
+        et.SubElement(root, "width").text = str(objcode.cdhd.width)
+        et.SubElement(root, "height").text = str(objcode.cdhd.height)
         
         # OBIM
         obim = et.SubElement(root, "image")
         et.SubElement(obim, "num_images").text = str(objimage.imhd.num_imnn)
         et.SubElement(obim, "num_zplanes").text = str(objimage.imhd.num_zpnn)
-        et.SubElement(obim, "flags").text = str(objimage.imhd.flags)
-        et.SubElement(obim, "unknown").text = str(objimage.imhd.unknown)
+        # Don't bother outputting OBIM flags and "unknown" (probably parent),
+        #  they are always 0.
+        #et.SubElement(obim, "flags").text = str(objimage.imhd.flags)
+        #et.SubElement(obim, "unknown").text = str(objimage.imhd.unknown)
         
         # OBCD
         obcd = et.SubElement(root, "code")
@@ -373,6 +407,7 @@ class ObjectBlockContainer(object):
         et.SubElement(obcd, "walk_y").text = str(objcode.cdhd.walk_y)
         et.SubElement(obcd, "actor_dir").text = str(objcode.cdhd.actor_dir)
 
+        util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "header.xml"))
         
     def generate_file_name(self):
@@ -488,11 +523,76 @@ class BlockCDHDV5(BlockDefaultV5):
         del values
         
         
+class BlockRMHDV5(BlockDefaultV5):
+    def _read_data(self, resource, start, decrypt):
+        """
+        width 16le
+        height 16le
+        num_objects 16le
+        """
+        data = resource.read(6)
+        if decrypt:
+            data = util.crypt(data, self.crypt_value)
+        values = struct.unpack("<3H", data)
+        del data
+        
+        # Unpack the values 
+        self.width, self.height, self.num_objects = values
+        del values
+        
+    def save_to_file(self, path):
+        root = et.Element("room")
+        
+        et.SubElement(root, "width").text = str(self.width)
+        et.SubElement(root, "height").text = str(self.height)
+        et.SubElement(root, "num_objects").text = str(self.num_objects)
+        
+        util.indent_elementtree(root)
+        et.ElementTree(root).write(os.path.join(path, "header.xml"))
+
+class BlockRMIHV5(BlockDefaultV5):
+    def _read_data(self, resource, start, decrypt):
+        """
+        num_zbuffers 16le
+        """
+        data = resource.read(2)
+        if decrypt:
+            data = util.crypt(data, self.crypt_value)
+        values = struct.unpack("<H", data)
+        del data
+        
+        # Unpack the values 
+        self.num_zbuffers = values[0]
+        del values
+        
+    def save_to_file(self, path):
+        root = et.Element("room_image")
+        
+        et.SubElement(root, "num_zbuffers").text = str(self.num_zbuffers)
+        
+        util.indent_elementtree(root)
+        et.ElementTree(root).write(os.path.join(path, "header.xml"))
+        
+        
 class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
+    """ SOUN blocks in V5 may contain CD track data. Unfortunately, these CD
+    blocks have no nice header value to look for. Instead, we have to check
+    the file size somehow."""
+    
+    def __init__(self, *args, **kwds):
+        super(BlockSOUNV5, self).__init__(*args, **kwds)
+        self.is_cd_track = False
+    
     def _read_data(self, resource, start, decrypt):
         global block_dispatcher
-        if self.size == 32:
-            self.data = self._read_raw_data(resource, self.size - (resource.tell() - start))
+        # Not a great way of checking this, since we will try to interpret legit
+        # block names as a number.
+        # cd_block_size should always be 24 if it's CD track block.
+        cd_block_size = util.str_to_int(resource.read(4), crypt_val=(self.crypt_value if decrypt else None))
+        resource.seek(-4, os.SEEK_CUR) # rewind
+        if cd_block_size == self.size - 8: # could just check if size == 32, but that might impact legit small blocks
+            self.data = self._read_raw_data(resource, self.size - (resource.tell() - start), decrypt)
+            self.is_cd_track = True
         else:
             end = start + self.size
             while resource.tell() < end:
@@ -501,7 +601,7 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
                 self.append(block)
                 
     def save_to_file(self, path):
-        if self.size == 32:
+        if self.is_cd_track:
             outfile = file(os.path.join(path, self.generate_file_name()), 'wb')
             self._write_header(outfile, path, False)
             self._write_raw_data(outfile, path, False)
@@ -515,7 +615,7 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
                 + "_" 
                 + ("unk_" if self.is_unknown else "")
                 + str(self.index).zfill(3))
-        if self.size == 32:
+        if self.is_cd_track:
             return name + ".dmp"
         else:
             return name
@@ -613,10 +713,10 @@ class BlockDispatcherV5(AbstractBlockDispatcher):
         
         # Sound blocks
         "SOU " : BlockSOUV5,
-        "ROL " : BlockSoundV5,
-        "SPK " : BlockSoundV5,
-        "ADL " : BlockSoundV5,
-        "SBL " : BlockSoundV5,
+        "ROL " : BlockMIDISoundV5,
+        "SPK " : BlockMIDISoundV5,
+        "ADL " : BlockMIDISoundV5,
+        "SBL " : BlockSBLV5,
         
         # Globally indexed blocks
         "COST" : BlockGloballyIndexedV5,
@@ -624,9 +724,11 @@ class BlockDispatcherV5(AbstractBlockDispatcher):
         "SCRP" : BlockGloballyIndexedV5,
         "SOUN" : BlockSOUNV5,
         
-        # Other special blocks
+        # Other blocks that should not used default block functionality
         "IMHD" : BlockIMHDV5,
         "LSCR" : BlockLSCRV5,
+        "RMHD" : BlockRMHDV5,
+        "RMIH" : BlockRMIHV5,
         "LOFF" : BlockLOFFV5
         
     }
@@ -670,6 +772,7 @@ class BlockRNAMV5(BlockDefaultV5):
             et.SubElement(room, "id").text = str(room_no)
             et.SubElement(room, "name").text = util.escape_invalid_chars(room_name)
         
+        util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "roomnames.xml"))
         
 
@@ -711,6 +814,7 @@ class BlockMAXSV5(BlockDefaultV5):
         et.SubElement(root, "unknown_4").text = str(self.unknown_4)
         et.SubElement(root, "inventory_objects").text = str(self.inventory_objects)
         
+        util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "maxs.xml"))
       
 class BlockIndexDirectoryV5(BlockDefaultV5):

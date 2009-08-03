@@ -67,7 +67,26 @@ def discard_invalid_chars(in_str):
     return ''.join([c for c in in_str if c in __valid_chars])
 
 def escape_invalid_chars(in_str):
-    return ''.join([(c if c in __valid_chars else '\\x' + hex(ord(c))).lstrip("0x").rstrip("L") for c in in_str])
+    return ''.join([((c if c in __valid_chars else ('\\x' + hex(ord(c))).lstrip("0x").rstrip("L").zfill(2))) for c in in_str])
+
+def indent_elementtree(elem, level=0):
+    """ This function taken from http://effbot.org/zone/element-lib.htm#prettyprint.
+    By Fredrik Lundh & Paul Du Bois."""
+    i = "\n" + level*"  "
+    if len(elem):
+        if not elem.text or not elem.text.strip():
+            elem.text = i + "  "
+        if not elem.tail or not elem.tail.strip():
+            elem.tail = i
+        for child in elem:
+            indent_elementtree(child, level+1)
+        if not child.tail or not child.tail.strip():
+            child.tail = i
+        if not elem.tail or not elem.tail.strip():
+            elem.tail = i
+    else:
+        if level and (not elem.tail or not elem.tail.strip()):
+            elem.tail = i
 
 class ScummPackerException(Exception):
     pass
