@@ -1,7 +1,8 @@
 import array
 import string
 
-__valid_chars = frozenset("-_.() %s%s" % (string.ascii_letters, string.digits)) # for filenames
+__valid_file_chars = frozenset("-_.() %s%s" % (string.ascii_letters, string.digits)) # for filenames
+__valid_text_chars = frozenset("!@#$%s&*+\"';:,-_.() %s%s" % ("%", string.ascii_letters, string.digits)) # for XML files
 
 # 0 = always display (errors)
 # 1 = warnings, verbose
@@ -50,10 +51,10 @@ def str_to_int(in_val, is_BE=False, crypt_val=None):
         out_val += ord(c) << (i * 8)
     return out_val
 
-def int_to_str(in_val, numBytes=4, is_BE=False, crypt_val=None):
+def int_to_str(in_val, num_bytes=4, is_BE=False, crypt_val=None):
     out_val = array.array('B')
     i = 0
-    while i < numBytes:
+    while i < num_bytes:
         b = (in_val >> (i * 8)) & 0xFF 
         out_val.append(b)
         i += 1
@@ -64,15 +65,15 @@ def int_to_str(in_val, numBytes=4, is_BE=False, crypt_val=None):
     return out_val.tostring()
 
 def discard_invalid_chars(in_str):
-    return ''.join([c for c in in_str if c in __valid_chars])
+    return ''.join([c for c in in_str if c in __valid_file_chars])
 
 def escape_invalid_chars(in_str):
-    return ''.join([((c if c in __valid_chars else ('\\x' + hex(ord(c))).lstrip("0x").rstrip("L").zfill(2))) for c in in_str])
+    return ''.join([(c if c in __valid_text_chars else ('\\x' + hex(ord(c)).lstrip("0x").rstrip("L").zfill(2))) for c in in_str])
 
 def indent_elementtree(elem, level=0):
     """ This function taken from http://effbot.org/zone/element-lib.htm#prettyprint.
     By Fredrik Lundh & Paul Du Bois."""
-    i = "\n" + level*"  "
+    i = "\n" + (level * "  ")
     if len(elem):
         if not elem.text or not elem.text.strip():
             elem.text = i + "  "

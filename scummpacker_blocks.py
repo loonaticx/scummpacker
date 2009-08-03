@@ -230,6 +230,9 @@ class BlockMIDISoundV5(BlockSoundV5):
     MDHD_SIZE = 16
     
     def save_to_file(self, path):
+        # Possibly the only MDhd block that is different:
+        # MI1CD\LECF\LFLF_011\SOUN_043\SOU
+        # 4D44 6864 0000 0008 0000 FF7F 0000 0080
         outfile = file(os.path.join(path, self.generate_file_name() + ".mhd"), 'wb')
         self._write_mdhd_header(outfile, path, False)
         outfile.close()
@@ -257,8 +260,25 @@ class BlockSBLV5(BlockSoundV5):
         super(BlockSBLV5, self)._read_data(resource, start, decrypt)
 
     def _write_header(self, outfile, path, encrypt):
-        # Will need to refactor this for saving to resource
-        outfile.write("Creative Voice File")
+        """
+        00h     14h     Contains the string "Creative Voice File" plus an EOF byte.
+        14h     2       The file offset to the sample data. This value usually is
+                        001Ah.
+        16h     2       Version number. The major version is in the high byte, the
+                        minor version in the low byte.
+        18h     2       Validity check. This word contains the complement (NOT
+                        operation) value of offset 16h added to 1234h.
+        1Ah     ...     Start of the sample data.
+        """
+        # Will need to refactor this to support saving to a resource file
+        header_name = "Creative Voice File\x1A"
+        data_offset = 0x1A
+        voc_version = 0x010A
+        voc_version_complement = (0x1234 + ~voc_version) & 0xFFFF
+        outfile.write(header_name
+                      + util.int_to_str(data_offset, num_bytes=2)
+                      + util.int_to_str(voc_version, num_bytes=2)
+                      + util.int_to_str(voc_version_complement, num_bytes=2))
 
     def generate_file_name(self):
         return self.name.rstrip() + ".voc"
@@ -342,7 +362,7 @@ class BlockLSCRV5(BlockDefaultV5):
         self.data = self._read_raw_data(resource, self.size - (resource.tell() - start), decrypt)
         
     def _write_data(self, outfile, path, encrypt):
-        script_num = util.int_to_str(self.script_id, numBytes=1)
+        script_num = util.int_to_str(self.script_id, num_bytes=1)
         if encrypt:
             script_num = util.crypt(script_num, self.crypt_value)
         outfile.write(script_num)
@@ -894,7 +914,7 @@ def __test():
     resfile = file("MONKEY.001", "rb")
     block = BlockLECFV5(4, 0x69)
     block.load_from_resource(resfile)
-    print block
+    #print block
     resfile.close()
     
     block.save_to_file(outpath)
