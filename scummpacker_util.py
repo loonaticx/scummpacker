@@ -1,5 +1,6 @@
 import array
 import string
+import copy
 
 __valid_file_chars = frozenset("-_.() %s%s" % (string.ascii_letters, string.digits)) # for filenames
 __valid_text_chars = frozenset("!@#$%s&*+\"';:,-_.() %s%s" % ("%", string.ascii_letters, string.digits)) # for XML files
@@ -29,14 +30,15 @@ def crypt(in_val, crypt_val):
     if crypt_val is None:
         return in_val
     if type(in_val) is str:
-        outString = ''
+        out_string = ''
         for c in in_val:
-            outString += chr(ord(c) ^ crypt_val)
-        return outString
+            out_string += chr(ord(c) ^ crypt_val)
+        return out_string
     elif type(in_val) is array.ArrayType:
-        for i, byte in enumerate(in_val):
-            in_val[i] = byte ^ crypt_val
-        return in_val
+        out_val = copy.deepcopy(in_val)
+        for i, byte in enumerate(out_val):
+            out_val[i] = byte ^ crypt_val
+        return out_val
     raise ScummPackerException("Could not encrypt values of type: " + str(type(in_val)))
 
 LE = False

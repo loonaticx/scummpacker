@@ -98,22 +98,22 @@ class AbstractBlock(object):
 
     def save_to_file(self, path):
         outfile = file(os.path.join(path, self.generate_file_name()), 'wb')
-        self._write_header(outfile, path, False)
-        self._write_data(outfile, path, False)
+        self._write_header(outfile, False)
+        self._write_data(outfile, False)
         outfile.close()
 
-    def _write_header(self, outfile, path, encrypt):
+    def _write_header(self, outfile, encrypt):
         # Different in old format resources
         raise NotImplementedError("This method must be overriden by a concrete class.")
 
-    def _write_data(self, outfile, path, encrypt):
-        self._write_raw_data(outfile, path, encrypt)
+    def _write_data(self, outfile, encrypt):
+        self._write_raw_data(outfile, encrypt)
 
-    def _write_raw_data(self, outfile, path, encrypt):
+    def _write_raw_data(self, outfile, encrypt):
+        data = self.data
         if encrypt:
-            for i, b in enumerate(self.data):
-                self.data[i] = util.crypt(b, self.crypt_value)
-        self.data.tofile(outfile)
+            data = util.crypt(data, self.crypt_value)
+        data.tofile(outfile)
         
     def generate_file_name(self):
         return self.name + ".dmp"
@@ -128,7 +128,7 @@ class BlockDefaultV5(AbstractBlock):
         self.name = self._read_name(resource, decrypt)
         self.size = self._read_size(resource, decrypt)
 
-    def _write_header(self, outfile, path, encrypt):
+    def _write_header(self, outfile, encrypt):
         name = util.crypt(self.name, self.crypt_value) if encrypt else self.name
         outfile.write(name)
         size = util.int_to_str(self.size, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
@@ -143,7 +143,7 @@ class BlockSoundV5(BlockDefaultV5):
             size = util.crypt(size, self.crypt_value)
         return util.str_to_int(size, is_BE=util.BE) + 8
     
-    def _write_header(self, outfile, path, encrypt):
+    def _write_header(self, outfile, encrypt):
         name = util.crypt(self.name, self.crypt_value) if encrypt else self.name
         outfile.write(name)
         size = util.int_to_str(self.size - 8, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
@@ -234,23 +234,25 @@ class BlockMIDISoundV5(BlockSoundV5):
         # MI1CD\LECF\LFLF_011\SOUN_043\SOU
         # 4D44 6864 0000 0008 0000 FF7F 0000 0080
         outfile = file(os.path.join(path, self.generate_file_name() + ".mhd"), 'wb')
-        self._write_mdhd_header(outfile, path, False)
+        self._write_mdhd_header(outfile, False)
         outfile.close()
         outfile = file(os.path.join(path, self.generate_file_name() + ".mid"), 'wb')
-        self._write_data(outfile, path, False)
+        self._write_data(outfile, False)
         outfile.close()
     
     def _read_header(self, resource, decrypt):
         super(BlockMIDISoundV5, self)._read_header(resource, decrypt)
         self.mdhd_header = self._read_raw_data(resource, self.MDHD_SIZE, decrypt)
     
-    def _write_mdhd_header(self, outfile, path, encrypt):
+    def _write_mdhd_header(self, outfile, encrypt):
         outfile.write(util.crypt(self.mdhd_header, (self.crypt_value if encrypt else None)))
 
 class BlockSOUV5(BlockSoundV5, BlockContainerV5):
     pass
 
 class BlockSBLV5(BlockSoundV5):
+    AU_HEADER = "AUhd\x00\x00\x00\x03\x00\x00\x80AUdt"
+    
     def _read_data(self, resource, start, decrypt):
         # SBL blocks have AUhd and AUdt headers instead of
         #  "Creative Voice File".
@@ -259,8 +261,36 @@ class BlockSBLV5(BlockSoundV5):
         resource.seek(19, os.SEEK_CUR)
         super(BlockSBLV5, self)._read_data(resource, start, decrypt)
 
-    def _write_header(self, outfile, path, encrypt):
+    def load_from_file(self, path):
+        # TODO: open file etc
+        voc_file = file(os.path.join(path, "SBL.voc"), 'rb')
+        self.size = len(voc_file)
+        voc_file.seek(0x1A, os.SEEK_CUR)
+        self._read_raw_data(voc_file, 0, False)
+        voc_file.close()
+        
+    def save_to_file(self, path):
+        outfile = file(os.path.join(path, self.generate_file_name()), 'wb')
+        self._write_VOC_header(outfile, False)
+        self._write_data(outfile, False)
+        outfile.close()
+
+    def save_to_resource(self, resource):
+        self._write_header(resource, True)
+        self._write_AUhd_header(resource, True)
+        self._write_data(resource, True)
+        
+    def _write_AUhd_header(self, outfile, encrypt):
+        voc_size = self.size - 27 # ignore all header info for size
+        au_header = AU_HEADER + util.str_to_int(voc_size, is_BE=True)
+        au_header = (util.crypt(au_header if encrypt else au_header))
+        outfile.write(au_header)
+        
+    def _write_VOC_header(self, outfile, encrypt):
         """
+        SBL block strips the "Creative Voice File" header information, so we
+        have to restore it. Thankfully there's not much there except for the
+        start of the data and the version of the VOC format.
         00h     14h     Contains the string "Creative Voice File" plus an EOF byte.
         14h     2       The file offset to the sample data. This value usually is
                         001Ah.
@@ -270,15 +300,16 @@ class BlockSBLV5(BlockSoundV5):
                         operation) value of offset 16h added to 1234h.
         1Ah     ...     Start of the sample data.
         """
-        # Will need to refactor this to support saving to a resource file
         header_name = "Creative Voice File\x1A"
         data_offset = 0x1A
         voc_version = 0x010A
         voc_version_complement = (0x1234 + ~voc_version) & 0xFFFF
-        outfile.write(header_name
-                      + util.int_to_str(data_offset, num_bytes=2)
-                      + util.int_to_str(voc_version, num_bytes=2)
-                      + util.int_to_str(voc_version_complement, num_bytes=2))
+        header = (header_name
+                  + util.int_to_str(data_offset, num_bytes=2)
+                  + util.int_to_str(voc_version, num_bytes=2)
+                  + util.int_to_str(voc_version_complement, num_bytes=2))
+        header = (util.crypt(header, self.crypt_value) if encrypt else header)
+        outfile.write(header)
 
     def generate_file_name(self):
         return self.name.rstrip() + ".voc"
@@ -361,12 +392,12 @@ class BlockLSCRV5(BlockDefaultV5):
         self.script_id = util.str_to_int(script_id)
         self.data = self._read_raw_data(resource, self.size - (resource.tell() - start), decrypt)
         
-    def _write_data(self, outfile, path, encrypt):
+    def _write_data(self, outfile, encrypt):
         script_num = util.int_to_str(self.script_id, num_bytes=1)
         if encrypt:
             script_num = util.crypt(script_num, self.crypt_value)
         outfile.write(script_num)
-        self._write_raw_data(outfile, path, encrypt)
+        self._write_raw_data(outfile, encrypt)
         
     def generate_file_name(self):
         return self.name + "_" + str(self.script_id).zfill(3) + ".dmp"
@@ -623,8 +654,8 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
     def save_to_file(self, path):
         if self.is_cd_track:
             outfile = file(os.path.join(path, self.generate_file_name()), 'wb')
-            self._write_header(outfile, path, False)
-            self._write_raw_data(outfile, path, False)
+            self._write_header(outfile, False)
+            self._write_raw_data(outfile, False)
             outfile.close()
         else:
             newpath = self._create_directory(path)
@@ -655,7 +686,7 @@ class BlockLFLFV5(BlockContainerV5, BlockGloballyIndexedV5):
                        + "\" at offset "
                        + str(location)
                        + " has no entry in the index file (.000). "
-                       + "It can not be re-packed or used in the game.")
+                       + "It can not be re-packed or used in the game without manually assigning an index.")
             self.is_unknown = True
             self.index = control.unknown_blocks_counter.get_next_index(self.name)    
     
