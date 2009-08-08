@@ -229,6 +229,9 @@ class BlockMIDISoundV5(BlockSoundV5):
     to a .mid file."""
     MDHD_SIZE = 16
     
+    #def load_from_file(self, path):
+    #    mdhd_file = file(self.name + "")
+    
     def save_to_file(self, path):
         # Possibly the only MDhd block that is different:
         # MI1CD\LECF\LFLF_011\SOUN_043\SOU
@@ -264,7 +267,7 @@ class BlockSBLV5(BlockSoundV5):
     def load_from_file(self, path):
         # TODO: open file etc
         voc_file = file(os.path.join(path, "SBL.voc"), 'rb')
-        self.size = len(voc_file)
+        self.size = len(voc_file) - 0x1A + 27 # ignore VOC header, add SBL block header (could just +1)
         voc_file.seek(0x1A, os.SEEK_CUR)
         self._read_raw_data(voc_file, 0, False)
         voc_file.close()
