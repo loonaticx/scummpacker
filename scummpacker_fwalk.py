@@ -27,22 +27,62 @@ class AbstractFileWalker(object):
 
 class RootFileWalkerV5(AbstractFileWalker):
     FILES_TO_FIND = {
-        "LECF" : None
+        r"LECF" : None
     }
     
 class IndexFileWalkerV5(AbstractFileWalker):
     FILES_TO_FIND = {
-        "maxs.xml" : None,
-        "roomnames.xml" : None,
-        "DOBJ.dmp" : None,
-        "DROO.dmp" : None
+        r"maxs\.xml" : None,
+        r"roomnames\.xml" : None,
+        r"DOBJ\.dmp" : None,
+        r"DROO\.dmp" : None
     }
     
 class FileWalkerLECFV5(AbstractFileWalker):
     FILES_TO_FIND = {
-        "ROOM" : None,
-        "SOUN_[0-9]{3}(?:.dmp)?" : None,
-        "CHAR_[0-9]{3}" : None,
-        "COST_[0-9]{3}" : None,
-        "_[0-9]{3}" : None
+        r"ROOM" : None,
+        r"SOUN_[0-9]{3}(?:\.dmp)?" : None,
+        r"CHAR_[0-9]{3}" : None,
+        r"COST_[0-9]{3}" : None,
+        r"SCRP_[0-9]{3}" : None
+    }
+    
+class FileWalkerROOMV5(AbstractFileWalker):
+    FILES_TO_FIND = {
+        r"BOXD\.dmp" : None,
+        r"BOXM\.dmp" : None,
+        r"CLUT\.dmp" : None,
+        r"CYCL\.dmp" : None,
+        r"EPAL\.dmp" : None,
+        r"SCAL\.dmp" : None,
+        r"TRNS\.dmp" : None,
+        r"header\.xml" : None,
+        r"RMIM" : None,
+        r"objects" : None,
+        r"scripts" : None
+    }
+    
+class FileWalkerScriptsDirV5(AbstractFileWalker):
+    FILES_TO_FIND = {
+        r"ENCD\.dmp" : None,
+        r"EXCD\.dmp" : None,
+        r"LSCR_[0-9]{3}\.dmp" : None
+    }
+    
+class FileWalkerObjectsDirV5(AbstractFileWalker):
+    FILES_TO_FIND = {
+        r"[0-9]{3}_.*" : None
+    }
+    
+class FileWalkerSingleObjectDirV5(AbstractFileWalker):
+    FILES_TO_FIND = {
+        r"IM[0-9a-fA-F]{2}" : None,
+        r"header\.xml" : None,
+        r"VERB\.dmp" : None
+    }
+    
+class FileWalkerImageV5(AbstractFileWalker):
+    FILES_TO_FIND = {
+        r"SMAP\.dmp" : None,
+        r"ZP[0-9a-fA-F]{3}\.dmp" : None
     }
