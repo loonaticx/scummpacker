@@ -2,6 +2,8 @@
 import os
 import re
 
+import scummpacker_blocks as blocks
+
 class AbstractFileWalker(object):
     # Map regular expressions to block types
     FILES_TO_FIND = {
@@ -24,6 +26,10 @@ class AbstractFileWalker(object):
                 block = block_type(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
                 block.load_from_file(kf)
                 self.children.append(block)
+                
+    def save_to_resource(self, path):
+        for c in self.children:
+            c.save_to_resource(path)
 
 class RootFileWalkerV5(AbstractFileWalker):
     FILES_TO_FIND = {
@@ -32,41 +38,41 @@ class RootFileWalkerV5(AbstractFileWalker):
     
 class IndexFileWalkerV5(AbstractFileWalker):
     FILES_TO_FIND = {
-        r"maxs\.xml" : None,
-        r"roomnames\.xml" : None,
-        r"DOBJ\.dmp" : None,
-        r"DROO\.dmp" : None
+        r"maxs\.xml" : blocks.BlockMAXSV5,
+        r"roomnames\.xml" : blocks.BlockRNAMV5,
+        r"DOBJ\.dmp" : blocks.BlockDOBJV5,
+        r"DROO\.dmp" : blocks.BlockDefaultV5
     }
     
 class FileWalkerLECFV5(AbstractFileWalker):
     FILES_TO_FIND = {
-        r"ROOM" : None,
-        r"SOUN_[0-9]{3}(?:\.dmp)?" : None,
-        r"CHAR_[0-9]{3}" : None,
-        r"COST_[0-9]{3}" : None,
-        r"SCRP_[0-9]{3}" : None
+        r"ROOM" : blocks.BlockROOMV5,
+        r"SOUN_[0-9]{3}(?:\.dmp)?" : blocks.BlockSOUNV5,
+        r"CHAR_[0-9]{3}" : blocks.BlockGloballyIndexedV5,
+        r"COST_[0-9]{3}" : blocks.BlockGloballyIndexedV5,
+        r"SCRP_[0-9]{3}" : blocks.BlockDefaultV5
     }
     
 class FileWalkerROOMV5(AbstractFileWalker):
     FILES_TO_FIND = {
-        r"BOXD\.dmp" : None,
-        r"BOXM\.dmp" : None,
-        r"CLUT\.dmp" : None,
-        r"CYCL\.dmp" : None,
-        r"EPAL\.dmp" : None,
-        r"SCAL\.dmp" : None,
-        r"TRNS\.dmp" : None,
-        r"header\.xml" : None,
-        r"RMIM" : None,
-        r"objects" : None,
-        r"scripts" : None
+        r"BOXD\.dmp" : blocks.BlockDefaultV5,
+        r"BOXM\.dmp" : blocks.BlockDefaultV5,
+        r"CLUT\.dmp" : blocks.BlockDefaultV5,
+        r"CYCL\.dmp" : blocks.BlockDefaultV5,
+        r"EPAL\.dmp" : blocks.BlockDefaultV5,
+        r"SCAL\.dmp" : blocks.BlockDefaultV5,
+        r"TRNS\.dmp" : blocks.BlockDefaultV5,
+        r"header\.xml" : blocks.BlockRMHDV5,
+        r"RMIM" : blocks.BlockContainerV5,
+        r"objects" : blocks.ObjectBlockContainer,
+        r"scripts" : blocks.ScriptBlockContainer
     }
     
 class FileWalkerScriptsDirV5(AbstractFileWalker):
     FILES_TO_FIND = {
-        r"ENCD\.dmp" : None,
-        r"EXCD\.dmp" : None,
-        r"LSCR_[0-9]{3}\.dmp" : None
+        r"ENCD\.dmp" : blocks.BlockDefaultV5,
+        r"EXCD\.dmp" : blocks.BlockDefaultV5,
+        r"LSCR_[0-9]{3}\.dmp" : blocks.BlockLSCRV5
     }
     
 class FileWalkerObjectsDirV5(AbstractFileWalker):
@@ -76,7 +82,7 @@ class FileWalkerObjectsDirV5(AbstractFileWalker):
     
 class FileWalkerSingleObjectDirV5(AbstractFileWalker):
     FILES_TO_FIND = {
-        r"IM[0-9a-fA-F]{2}" : None,
+        r"IM[0-9a-fA-F]{2}" : blocks.BlockContainerV5,
         r"header\.xml" : None,
         r"VERB\.dmp" : None
     }
