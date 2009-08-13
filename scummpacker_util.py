@@ -72,6 +72,9 @@ def discard_invalid_chars(in_str):
 def escape_invalid_chars(in_str):
     return ''.join([(c if c in __valid_text_chars else ('\\x' + hex(ord(c)).lstrip("0x").rstrip("L").zfill(2))) for c in in_str])
 
+def unescape_invalid_chars(in_str):
+    return in_str
+
 def indent_elementtree(elem, level=0):
     """ This function taken from http://effbot.org/zone/element-lib.htm#prettyprint.
     By Fredrik Lundh & Paul Du Bois."""

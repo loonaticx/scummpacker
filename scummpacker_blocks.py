@@ -407,6 +407,7 @@ class BlockLSCRV5(BlockDefaultV5):
         
 
 class ObjectBlockContainer(object):
+    """ Contains objects, which contain image and code blocks."""
     def __init__(self):
         self.objects = {}
     
@@ -463,7 +464,71 @@ class ObjectBlockContainer(object):
 
         util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "header.xml"))
+
+    
+    def load_from_file(self, path):
+        file_list = os.listdir(path)
         
+        re_pattern = re.compile(r"[0-9]{3}_.*")
+        object_dirs = [f for f in file_list if re_pattern.match(f) != None]
+        for od in object_dirs:
+            new_path = os.path.join(path, od)
+            # Read the header
+            # Generate IMHD from header.xml
+            # Read IMnn container dirs
+            # - Read SMAP.dmp
+            # - Read ZPnn.dmp files
+            
+            # Generate CDHD from header.xml
+            # Read VERB.dmp
+            # Generate OBNA from header.xml
+            
+            # Add image and code block to internal object container
+
+    def _load_header_from_xml(self, path, objimage, objcode):
+        tree = et.parse(os.path.join(path, "header.xml"))
+        root = tree.getroot()
+
+        # Shared
+        name = util.unescape_invalid_chars(root.find("name").text)
+        objcode.obj_name = name
+        objcode.obna.data = name + "\x00"
+        obj_id = int(root.find("id").text)
+        objcode.obj_id = obj_id # TODO: revise this to write to cdhd (use property)
+        objcode.cdhd.obj_id = obj_id
+        objimage.obj_id = obj_id # TODO: revise this to write to imhd (use property)
+        objimage.imhd.obj_id = obj_id
+        x = int(root.find("x").text)
+        objcode.cdhd.x = x
+        objimage.imhd.x = x
+        y = int(root.find("y").text)
+        objcode.cdhd.y = y
+        objimage.imhd.y = y
+        width = int(root.find("width").text)
+        objcode.cdhd.width = width
+        objimage.imhd.width = width
+        height = int(root.find("height").text)
+        objcode.cdhd.height = height
+        objimage.imhd.height = height
+        
+        # OBIM
+        obim_node = root.find("image")
+        objimage.imhd.num_imnn = int(obim_node.find("num_images").text)
+        objimage.imhd.num_zpnn = int(obim_node.find("num_zplanes").text)
+        
+        # OBCD
+        obcd_node = root.find("code")
+        flags = int(obcd_node.find("flags").text)
+        objcode.cdhd.flags = flags
+        objimage.imhd.flags = flags # probably not right
+        parent = int(obcd_node.find("parent").text)
+        objcode.cdhd.parent = parent
+        objimage.imhd.unknown = parent # almost certainly not right
+        objcode.cdhd.walk_x = int(obcd_node.find("walk_x").text)
+        objcode.cdhd.walk_y = int(obcd_node.find("walk_y").text)
+        objcode.cdhd.actor_dir = int(obcd_node.find("actor_dir").text)
+        
+            
     def generate_file_name(self):
         return "objects"
     
@@ -502,7 +567,7 @@ class BlockIMHDV5(BlockDefaultV5):
         width        : 16le
         height       : 16le
         
-        not sure about the following:
+        not sure about the following, I think it's only applicable for SCUMM V6+:
         num hotspots : 16le (usually one for each IMnn, but their is one even
                        if no IMnn is present)
         hotspots
@@ -537,18 +602,55 @@ class BlockOBCDV5(BlockContainerV5):
         block.load_from_resource(resource)
         self.verb = block
         
-        block = BlockDefaultV5(self.block_name_length, self.crypt_value)
+        block = BlockOBNAV5(self.block_name_length, self.crypt_value)
         block.load_from_resource(resource)
         self.obna = block
         
         self.obj_name = self.obna.data[:-1].tostring() # cheat
-    
+
+    def load_from_file(self, path):
+        block = BlockCDHDV5(self.block_name_length, self.crypt_value)
+        block.load_from_file(path)
+        self.obj_id = block.obj_id # maybe should handle header info better
+        self.cdhd = block
+        
+        block = BlockDefaultV5(self.block_name_length, self.crypt_value)
+        block.load_from_file(os.path.join(path, "VERB.dmp")) # hmm
+        self.verb = block
+        
+        block = BlockOBNAV5(self.block_name_length, self.crypt_value)
+        block.load_from_file(path)
+        self.obna = block
+        
+        self.obj_name = self.obna.data[:-1].tostring() # cheat
+        
     def save_to_file(self, path):
         self.verb.save_to_file(path)
         
     def generate_file_name(self):
         return str(self.obj_id) + "_" + self.obj_name
     
+class BlockOBNAV5(BlockDefaultV5):
+    def _read_data(self, resource, start, decrypt):
+        data = resource.read(self.size - (resource.tell() - start))
+        if decrypt:
+            data = util.crypt(data, self.crypt_value)
+        self.obj_name = data[:-1]
+        
+    def load_from_file(self, path):
+        self.name = "OBNA"
+        self._load_header_from_xml(path)
+        self.size = len(self.obj_name) + 8
+    
+    def _load_header_from_xml(self, path):
+        tree = et.parse(os.path.join(path, "header.xml"))
+        root = tree.getroot()
+        
+        # Shared
+        self.obj_name = util.unescape_invalid_chars(root.find("name").text)
+        
+    #def save_to_resource(self, path):
+    #    write object name + "\x00"
     
 class BlockCDHDV5(BlockDefaultV5):
     def _read_data(self, resource, start, decrypt):
@@ -575,7 +677,31 @@ class BlockCDHDV5(BlockDefaultV5):
         self.obj_id, self.x, self.y, self.width, self.height, self.flags, \
             self.parent, self.walk_x, self.walk_y, self.actor_dir = values
         del values
+
+    def load_from_file(self, path):
+        self.name = "CDHD"
+        self.size = 13 + 8 # data + header
+        self._load_header_from_xml(path)
         
+    def _load_header_from_xml(self, path):
+        tree = et.parse(os.path.join(path, "header.xml"))
+        root = tree.getroot()
+        
+        # Shared
+        obj_id = int(root.find("id").text)
+        self.obj_id = obj_id
+        self.x = int(root.find("x").text)
+        self.y = int(root.find("y").text)
+        self.width = int(root.find("width").text)
+        self.height = int(root.find("height").text)
+        
+        # OBCD
+        obcd_node = root.find("code")
+        self.flags = int(obcd_node.find("flags").text)
+        self.parent = int(obcd_node.find("parent").text)
+        self.walk_x = int(obcd_node.find("walk_x").text)
+        self.walk_y = int(obcd_node.find("walk_y").text)
+        self.actor_dir = int(obcd_node.find("actor_dir").text)
         
 class BlockRMHDV5(BlockDefaultV5):
     def _read_data(self, resource, start, decrypt):

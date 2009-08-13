@@ -14,7 +14,7 @@ class AbstractFileDispatcher(object):
         super(AbstractFileDispatcher, self).__init__(*args, **kwds)
         self.children = []
     
-    def walk_path(self, path):
+    def dispatch_files(self, path):
         file_list = os.listdir(path)
         # For all file namings we know about, try to create a block and load the
         #  block into memory, interpreting the data from the file.
