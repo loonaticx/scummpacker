@@ -4,14 +4,14 @@ import re
 
 import scummpacker_blocks as blocks
 
-class AbstractFileWalker(object):
+class AbstractFileDispatcher(object):
     # Map regular expressions to block types
     FILES_TO_FIND = {
         
     }
     
     def __init__(self, *args, **kwds):
-        super(AbstractFileWalker, self).__init__(*args, **kwds)
+        super(AbstractFileDispatcher, self).__init__(*args, **kwds)
         self.children = []
     
     def walk_path(self, path):
@@ -24,19 +24,18 @@ class AbstractFileWalker(object):
             for kf in known_files:
                 block_type = self.FILES_TO_FIND[kf]
                 block = block_type(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
-                block.load_from_file(kf)
-                self.children.append(block)
+                yield block
                 
     def save_to_resource(self, path):
         for c in self.children:
             c.save_to_resource(path)
 
-class RootFileWalkerV5(AbstractFileWalker):
+class RootFileDispatcherV5(AbstractFileDispatcher):
     FILES_TO_FIND = {
         r"LECF" : None
     }
     
-class IndexFileWalkerV5(AbstractFileWalker):
+class IndexFileDispatcherV5(AbstractFileDispatcher):
     FILES_TO_FIND = {
         r"maxs\.xml" : blocks.BlockMAXSV5,
         r"roomnames\.xml" : blocks.BlockRNAMV5,
@@ -44,7 +43,7 @@ class IndexFileWalkerV5(AbstractFileWalker):
         r"DROO\.dmp" : blocks.BlockDefaultV5
     }
     
-class FileWalkerLECFV5(AbstractFileWalker):
+class FileDispatcherLECFV5(AbstractFileDispatcher):
     FILES_TO_FIND = {
         r"ROOM" : blocks.BlockROOMV5,
         r"SOUN_[0-9]{3}(?:\.dmp)?" : blocks.BlockSOUNV5,
@@ -53,7 +52,7 @@ class FileWalkerLECFV5(AbstractFileWalker):
         r"SCRP_[0-9]{3}" : blocks.BlockDefaultV5
     }
     
-class FileWalkerROOMV5(AbstractFileWalker):
+class FileDispatcherROOMV5(AbstractFileDispatcher):
     FILES_TO_FIND = {
         r"BOXD\.dmp" : blocks.BlockDefaultV5,
         r"BOXM\.dmp" : blocks.BlockDefaultV5,
@@ -68,26 +67,26 @@ class FileWalkerROOMV5(AbstractFileWalker):
         r"scripts" : blocks.ScriptBlockContainer
     }
     
-class FileWalkerScriptsDirV5(AbstractFileWalker):
+class FileDispatcherScriptsDirV5(AbstractFileDispatcher):
     FILES_TO_FIND = {
         r"ENCD\.dmp" : blocks.BlockDefaultV5,
         r"EXCD\.dmp" : blocks.BlockDefaultV5,
         r"LSCR_[0-9]{3}\.dmp" : blocks.BlockLSCRV5
     }
     
-class FileWalkerObjectsDirV5(AbstractFileWalker):
+class FileDispatcherObjectsDirV5(AbstractFileDispatcher):
     FILES_TO_FIND = {
         r"[0-9]{3}_.*" : None
     }
     
-class FileWalkerSingleObjectDirV5(AbstractFileWalker):
+class FileDispatcherSingleObjectDirV5(AbstractFileDispatcher):
     FILES_TO_FIND = {
         r"IM[0-9a-fA-F]{2}" : blocks.BlockContainerV5,
         r"header\.xml" : None,
         r"VERB\.dmp" : None
     }
     
-class FileWalkerImageV5(AbstractFileWalker):
+class FileDispatcherImageV5(AbstractFileDispatcher):
     FILES_TO_FIND = {
         r"SMAP\.dmp" : None,
         r"ZP[0-9a-fA-F]{3}\.dmp" : None
