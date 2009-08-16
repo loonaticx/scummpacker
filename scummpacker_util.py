@@ -97,5 +97,5 @@ def indent_elementtree(elem, level=0):
 class ScummPackerException(Exception):
     pass
 
-class ScummPackerUnrecognisedIndexException(Exception):
+class ScummPackerUnrecognisedIndexException(ScummPackerException):
     pass

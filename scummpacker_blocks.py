@@ -96,6 +96,13 @@ class AbstractBlock(object):
             data = util.crypt(data, self.crypt_value)
         return data
 
+    def load_from_file(self, path):
+        block_file = file(path, 'rb')
+        start = block_file.tell()
+        self._read_header(block_file, True)
+        self._read_data(block_file, start, True)
+        block_file.close()
+
     def save_to_file(self, path):
         outfile = file(os.path.join(path, self.generate_file_name()), 'wb')
         self._write_header(outfile, False)
@@ -473,61 +480,14 @@ class ObjectBlockContainer(object):
         object_dirs = [f for f in file_list if re_pattern.match(f) != None]
         for od in object_dirs:
             new_path = os.path.join(path, od)
-            # Read the header
-            # Generate IMHD from header.xml
-            # Read IMnn container dirs
-            # - Read SMAP.dmp
-            # - Read ZPnn.dmp files
             
-            # Generate CDHD from header.xml
-            # Read VERB.dmp
-            # Generate OBNA from header.xml
+            objimage = BlockOBIMV5(self.block_name_length, self.crypt_value)
+            objimage.load_from_file(new_path)
+            self.add_image_block(objimage)
             
-            # Add image and code block to internal object container
-
-    def _load_header_from_xml(self, path, objimage, objcode):
-        tree = et.parse(os.path.join(path, "header.xml"))
-        root = tree.getroot()
-
-        # Shared
-        name = util.unescape_invalid_chars(root.find("name").text)
-        objcode.obj_name = name
-        objcode.obna.data = name + "\x00"
-        obj_id = int(root.find("id").text)
-        objcode.obj_id = obj_id # TODO: revise this to write to cdhd (use property)
-        objcode.cdhd.obj_id = obj_id
-        objimage.obj_id = obj_id # TODO: revise this to write to imhd (use property)
-        objimage.imhd.obj_id = obj_id
-        x = int(root.find("x").text)
-        objcode.cdhd.x = x
-        objimage.imhd.x = x
-        y = int(root.find("y").text)
-        objcode.cdhd.y = y
-        objimage.imhd.y = y
-        width = int(root.find("width").text)
-        objcode.cdhd.width = width
-        objimage.imhd.width = width
-        height = int(root.find("height").text)
-        objcode.cdhd.height = height
-        objimage.imhd.height = height
-        
-        # OBIM
-        obim_node = root.find("image")
-        objimage.imhd.num_imnn = int(obim_node.find("num_images").text)
-        objimage.imhd.num_zpnn = int(obim_node.find("num_zplanes").text)
-        
-        # OBCD
-        obcd_node = root.find("code")
-        flags = int(obcd_node.find("flags").text)
-        objcode.cdhd.flags = flags
-        objimage.imhd.flags = flags # probably not right
-        parent = int(obcd_node.find("parent").text)
-        objcode.cdhd.parent = parent
-        objimage.imhd.unknown = parent # almost certainly not right
-        objcode.cdhd.walk_x = int(obcd_node.find("walk_x").text)
-        objcode.cdhd.walk_y = int(obcd_node.find("walk_y").text)
-        objcode.cdhd.actor_dir = int(obcd_node.find("actor_dir").text)
-        
+            objcode = BlockOBCDV5(self.block_name_length, self.crypt_value)
+            objcode.load_from_file(new_path)
+            self.add_code_block(objcode)
             
     def generate_file_name(self):
         return "objects"
@@ -540,16 +500,44 @@ class ObjectBlockContainer(object):
 class BlockOBIMV5(BlockContainerV5):
     def _read_data(self, resource, start, decrypt):
         end = start + self.size
+        
+        # Load the header
         block = BlockIMHDV5(self.block_name_length, self.crypt_value)
         block.load_from_resource(resource)
         self.obj_id = block.obj_id # maybe should handle header info better
         self.imhd = block
+        
+        # Load the image data
         i = block.num_imnn
         while i > 0:
             block = BlockContainerV5(self.block_name_length, self.crypt_value)
             block.load_from_resource(resource)
             self.append(block)
             i -= 1
+
+    def load_from_file(self, path):
+        # Load the header
+        block = BlockIMHDV5(self.block_name_length, self.crypt_value)
+        block.load_from_file(path)
+        self.obj_id = block.obj_id
+        self.imhd = block
+        
+        # Load the image data
+        file_list = os.listdir(path)
+        re_pattern = re.compile(r"IM[0-9a-fA-F]{2}")
+        imnn_dirs = [f for f in file_list if re_pattern.match(f) != None]
+        if len(imnn_dirs) != block.num_imnn:
+            raise util.ScummPackerException("Number of images in the header ("
+            + str(block.num_imnn)
+            + ") does not match the number of image directories ("
+            + str(len(imnn_dirs))
+            + ")")
+        
+        for d in imnn_dirs:
+            new_path = os.path.join(path, d)
+            block = BlockContainerV5(self.block_name_length, self.crypt_value)
+            block.load_from_file(new_path)
+            self.append(block)
     
     def generate_file_name(self):
         return ""
@@ -586,7 +574,34 @@ class BlockIMHDV5(BlockDefaultV5):
             self.x, self.y, self.width, self.height = values
         del values
         
+    def load_from_file(self, path):
+        self.name = "IMHD"
+        self.size = 16 + 8 # data + block header
+        self._load_header_from_xml(path)
+        
+    def _load_header_from_xml(self, path):
+        tree = et.parse(os.path.join(path, "header.xml"))
+        root = tree.getroot()
+        
+        # Shared
+        self.obj_id = int(root.find("id").text)
+        self.x = int(root.find("x").text)
+        self.y = int(root.find("y").text)
+        self.width = int(root.find("width").text)
+        self.height = int(root.find("height").text)
+
+        # OBIM
+        obim_node = root.find("image")
+        self.num_imnn = int(obim_node.find("num_images").text)
+        self.num_zpnn = int(obim_node.find("num_zplanes").text)
+        
+        # OBCD
+        obcd_node = root.find("code")
+        self.flags = int(obcd_node.find("flags").text) # possibly wrong
+        self.unknown = int(obcd_node.find("parent").text) # almost certainly wrong
+        
     def save_to_file(self, path):
+        """ Combined header.xml is saved in the ObjectBlockContainer."""
         pass
 
     
@@ -853,8 +868,9 @@ class BlockLECFV5(BlockContainerV5):
 class AbstractBlockDispatcher(object):
     CRYPT_VALUE = None
     BLOCK_NAME_LENGTH = None
-    BLOCK_MAP = None
+    BLOCK_MAP = {}
     DEFAULT_BLOCK = None
+    REGEX_BLOCKS = []
     
     def dispatch_next_block(self, resource):
         assert type(resource) is file
@@ -863,19 +879,19 @@ class AbstractBlockDispatcher(object):
             block_name = util.crypt(block_name, self.CRYPT_VALUE)
         if block_name in self.BLOCK_MAP:
             block_type = self.BLOCK_MAP[block_name]            
-        elif self._is_quirky_block(block_name):
-            block_type = self._dispatch_quirky_block(block_name)
         else:
-            block_type = self.DEFAULT_BLOCK
+            block_type = self._dispatch_regex_block(block_name)
+            if block_type is None:
+                block_type = self.DEFAULT_BLOCK
         block = block_type(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
         resource.seek(-self.BLOCK_NAME_LENGTH, os.SEEK_CUR)
         return block
-
-    def _is_quirky_block(self, block_name):
-        return False
     
-    def _dispatch_quirky_block(self, block_name):
-        raise NotImplementedError("This method must be overriden by a concrete class if required.")
+    def _dispatch_regex_block(self, block_name):
+        for re_pattern, block_type in self.REGEX_BLOCKS:
+            if re_pattern.match(block_name) != None:
+                return block_type
+        return None
     
 class BlockDispatcherV5(AbstractBlockDispatcher):
     
@@ -912,22 +928,68 @@ class BlockDispatcherV5(AbstractBlockDispatcher):
         "LOFF" : BlockLOFFV5
         
     }
+    REGEX_BLOCKS = [
+        (re.compile(r"IM[0-9]{2}"), BlockContainerV5)
+    ]
     DEFAULT_BLOCK = BlockDefaultV5
-    
-    def _is_quirky_block(self, block_name):
-        re_pattern = re.compile("IM[0-9]{2}")
-        if re_pattern.match(block_name) != None:
-            return True
-        return False
-    
-    def _dispatch_quirky_block(self, block_name):
-        re_pattern = re.compile("IM[0-9]{2}")
-        if re_pattern.match(block_name) != None:
-            return BlockContainerV5
-        raise util.ScummPackerException("Tried to dispatch apparently known quirky block \"" 
-                                        + block_name 
-                                        + "\", but I don't know what to do with it!")
 
+class FileDispatcherV5(AbstractBlockDispatcher):
+    CRYPT_VALUE = 0x69
+    BLOCK_NAME_LENGTH = 4
+    BLOCK_MAP = {
+        # Root
+        r"LECF" : BlockLECFV5,
+        # LECF
+        # -LFLF
+        r"ROOM" : BlockROOMV5,
+        # --ROOM
+        r"BOXD.dmp" : BlockDefaultV5,
+        r"BOXM.dmp" : BlockDefaultV5,
+        r"CLUT.dmp" : BlockDefaultV5,
+        r"CYCL.dmp" : BlockDefaultV5,
+        r"EPAL.dmp" : BlockDefaultV5,
+        r"SCAL.dmp" : BlockDefaultV5,
+        r"TRNS.dmp" : BlockDefaultV5,
+        #r"header\.xml" : BlockRMHDV5, # this could be any header
+        r"RMIM" : BlockContainerV5,
+        r"objects" : ObjectBlockContainer,
+        r"scripts" : ScriptBlockContainer
+        # ---objects (incl. subdirs)
+        r"VERB.dmp" : BlockDefaultV5,
+        r"SMAP.dmp" : BlockDefaultV5, # also RMIM
+        # ---scripts
+        r"ENCD.dmp" : BlockDefaultV5,
+        r"EXCD.dmp" : BlockDefaultV5,
+    }
+    REGEX_BLOCKS = [
+        # LECF
+        (re.compile(r"LFLF_[0-9]{3}.*"), BlockLFLFV5),
+        # -LFLF
+        (re.compile(r"SOUN_[0-9]{3}(?:\.dmp)?"), BlockSOUNV5),
+        (re.compile(r"CHAR_[0-9]{3}"), BlockGloballyIndexedV5),
+        (re.compile(r"COST_[0-9]{3}"), BlockGloballyIndexedV5),
+        (re.compile(r"SCRP_[0-9]{3}"), BlockDefaultV5)
+        # --ROOM
+        # ---objects
+        (re.compile(r"IM[0-9a-fA-F]{2}"), BlockContainerV5), # also RMIM
+        (re.compile(r"ZP[0-9a-fA-F]{3}\.dmp"), BlockDefaultV5), # also RMIM
+        # --scripts
+        (re.compile(r"LSCR_[0-9]{3}\.dmp"), blocks.BlockLSCRV5)
+    ]
+    DEFAULT_BLOCK = BlockDefaultV5
+
+class IndexFileDispatcherV5(AbstractBlockDispatcher):
+    CRYPT_VALUE = 0x69
+    BLOCK_NAME_LENGTH = 4
+    BLOCK_MAP = {
+        r"maxs\.xml" : blocks.BlockMAXSV5,
+        r"roomnames\.xml" : blocks.BlockRNAMV5,
+        r"DOBJ\.dmp" : blocks.BlockDOBJV5,
+        r"DROO\.dmp" : blocks.BlockDefaultV5
+    }
+    REGEX_BLOCKS = [
+    ]
+    DEFAULT_BLOCK = BlockDefaultV5
 
 class BlockRNAMV5(BlockDefaultV5):
     def _read_data(self, resource, start, decrypt):
@@ -1044,6 +1106,7 @@ class IndexBlockContainerV5(AbstractBlockDispatcher):
         "DCHR" : BlockIndexDirectoryV5,
         "DOBJ" : BlockDOBJV5
     }
+    REGEX_BLOCKS = []
     DEFAULT_BLOCK = BlockDefaultV5
     
     def load_from_resource(self, resource, room_start=0):
