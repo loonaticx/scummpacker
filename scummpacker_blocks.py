@@ -99,8 +99,8 @@ class AbstractBlock(object):
     def load_from_file(self, path):
         block_file = file(path, 'rb')
         start = block_file.tell()
-        self._read_header(block_file, True)
-        self._read_data(block_file, start, True)
+        self._read_header(block_file, False)
+        self._read_data(block_file, start, False)
         block_file.close()
 
     def save_to_file(self, path):
@@ -734,6 +734,19 @@ class BlockRMHDV5(BlockDefaultV5):
         # Unpack the values 
         self.width, self.height, self.num_objects = values
         del values
+    
+    def load_from_file(self, path):
+        self.name = "RMHD"
+        self.size = 6 + 8
+        self._load_header_from_xml(path)
+
+    def _load_header_from_xml(path):
+        tree = et.parse(os.path.join(path, "header.xml"))
+        root = tree.getroot()
+        
+        self.width = int(root.find("width").text)
+        self.height = int(root.find("height").text)
+        self.num_objects = int(root.find("num_objects").text)
         
     def save_to_file(self, path):
         root = et.Element("room")
@@ -759,6 +772,18 @@ class BlockRMIHV5(BlockDefaultV5):
         # Unpack the values 
         self.num_zbuffers = values[0]
         del values
+    
+    
+    def load_from_file(self, path):
+        self.name = "RMIH"
+        self.size = 1 + 8
+        self._load_header_from_xml(path)
+
+    def _load_header_from_xml(path):
+        tree = et.parse(os.path.join(path, "header.xml"))
+        root = tree.getroot()
+        
+        self.num_zbuffers = int(root.find("num_zbuffers").text)
         
     def save_to_file(self, path):
         root = et.Element("room_image")
@@ -972,7 +997,7 @@ class FileDispatcherV5(AbstractBlockDispatcher):
         # --ROOM
         # ---objects
         (re.compile(r"IM[0-9a-fA-F]{2}"), BlockContainerV5), # also RMIM
-        (re.compile(r"ZP[0-9a-fA-F]{3}\.dmp"), BlockDefaultV5), # also RMIM
+        (re.compile(r"ZP[0-9a-fA-F]{2}\.dmp"), BlockDefaultV5), # also RMIM
         # --scripts
         (re.compile(r"LSCR_[0-9]{3}\.dmp"), blocks.BlockLSCRV5)
     ]

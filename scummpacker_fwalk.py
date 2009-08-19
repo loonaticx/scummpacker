@@ -89,5 +89,5 @@ class FileDispatcherSingleObjectDirV5(AbstractFileDispatcher):
 class FileDispatcherImageV5(AbstractFileDispatcher):
     FILES_TO_FIND = {
         r"SMAP\.dmp" : None,
-        r"ZP[0-9a-fA-F]{3}\.dmp" : None
+        r"ZP[0-9a-fA-F]{2}\.dmp" : None
     }
