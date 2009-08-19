@@ -655,7 +655,7 @@ class BlockOBNAV5(BlockDefaultV5):
     def load_from_file(self, path):
         self.name = "OBNA"
         self._load_header_from_xml(path)
-        self.size = len(self.obj_name) + 8
+        self.size = len(self.obj_name) + 1 + 8
     
     def _load_header_from_xml(self, path):
         tree = et.parse(os.path.join(path, "header.xml"))
