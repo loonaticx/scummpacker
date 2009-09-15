@@ -9,6 +9,9 @@ import scummpacker_util as util
 block_order_index_v5 = [
     
 ]
+
+# DELETE THIS
+# order is hardcoded and implicit in the s
 block_order_res_v5 = [
     "LOFF",
     "LFLF",
@@ -57,6 +60,7 @@ block_order_res_v5 = [
 ]
 
 block_dispatcher = None
+file_dipsatcher = None
 
 class AbstractBlock(object):
     def __init__(self, block_name_length, crypt_value, *args, **kwds):
@@ -183,6 +187,11 @@ class BlockGloballyIndexedV5(BlockDefaultV5):
             self.is_unknown = True
             self.index = control.unknown_blocks_counter.get_next_index(self.name)
         
+    def load_from_file(self, path):
+        """ Assumes we won't get any 'unknown' blocks, based on the regex in the file walker."""
+        self.index = os.path.split(path)[1][-3:]
+        super(BlockGloballyIndexedV5, self).load_from_file(path)
+
     def generate_file_name(self):
         return (self.name 
                 + "_" 
@@ -224,6 +233,19 @@ class BlockContainerV5(BlockDefaultV5):
         for child in self.children:
             child.save_to_file(path)
         
+    def load_from_file(self, path):
+        #global file
+        self.name = os.path.split(path)[1]
+        self.children = []
+        
+        file_list = os.listdir(path)
+        
+        file_dispatcher = FileDispatcherV5()
+        for f in file_list:
+            b = file_dispatcher.dispatch_next_block(f)
+            b.load_from_file(os.path.join(path, f))
+            self.children.append(b)
+    
     def generate_file_name(self):
         return self.name
     
@@ -235,9 +257,15 @@ class BlockMIDISoundV5(BlockSoundV5):
     """ Saves the MDhd header data to a .mhd file, saves the rest of the block 
     to a .mid file."""
     MDHD_SIZE = 16
+    MDHD_DEFAULT_DATA = r"\x4D\x44\x68\x64\x00\x00\x00\x08\x00\x00\x80\x7F\x00\x00\x00\x80"
     
-    #def load_from_file(self, path):
-    #    mdhd_file = file(self.name + "")
+    def load_from_file(self, path):
+        try:
+            mdhd_file = file(os.path.splitext(path)[0] + ".mdhd", 'rb')
+            mdhd_data = self._read_raw_data(mdhd_file, self.MDHD_SIZE, decrypt)
+        except Exception, e:
+            mmdhd_data = self._generate_mdhd_header()
+            
     
     def save_to_file(self, path):
         # Possibly the only MDhd block that is different:
@@ -256,6 +284,9 @@ class BlockMIDISoundV5(BlockSoundV5):
     
     def _write_mdhd_header(self, outfile, encrypt):
         outfile.write(util.crypt(self.mdhd_header, (self.crypt_value if encrypt else None)))
+
+    def _generate_mdhd_header(self):
+        return array.array('B', self.MDHD_DEFAULT_DATA)
 
 class BlockSOUV5(BlockSoundV5, BlockContainerV5):
     pass
@@ -830,6 +861,20 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
             newpath = self._create_directory(path)
             self._save_children(newpath)
                 
+    def load_from_file(self, path):
+        #global file_dispatcher
+        self.name = os.path.split(path)[1]
+        self.index = 
+        self.children = []
+        
+        file_list = os.listdir(path)
+        
+        file_dispatcher = FileDispatcherV5()
+        for f in file_list:
+            b = file_dispatcher.dispatch_next_block(f)
+            b.load_from_file(os.path.join(path, f))
+            self.children.append(b)
+
     def generate_file_name(self):
         name = (self.name 
                 + "_" 
