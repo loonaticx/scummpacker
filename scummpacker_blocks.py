@@ -104,6 +104,8 @@ class AbstractBlock(object):
         block_file = file(path, 'rb')
         start = block_file.tell()
         self._read_header(block_file, False)
+        print self.size
+        print self.name
         self._read_data(block_file, start, False)
         block_file.close()
 
@@ -243,8 +245,9 @@ class BlockContainerV5(BlockDefaultV5):
         file_dispatcher = FileDispatcherV5()
         for f in file_list:
             b = file_dispatcher.dispatch_next_block(f)
-            b.load_from_file(os.path.join(path, f))
-            self.children.append(b)
+            if b != None:
+                b.load_from_file(os.path.join(path, f))
+                self.children.append(b)
     
     def generate_file_name(self):
         return self.name
@@ -404,7 +407,7 @@ class BlockLOFFV5(BlockDefaultV5):
         pass
 
 class ScriptBlockContainer(object):
-    def __init__(self):
+    def __init__(self, *args, **kwds):
         self.scripts = []
     
     def append(self, block):
@@ -416,7 +419,23 @@ class ScriptBlockContainer(object):
             os.mkdir(newpath) # throws an exception if can't create dir
         for s in self.scripts:
             s.save_to_file(newpath)
+
+    def load_from_file(self, path):
+        file_list = os.listdir(path)
         
+        re_pattern = re.compile(r"[0-9]{3}_.*")
+        object_dirs = [f for f in file_list if re_pattern.match(f) != None]
+        for od in object_dirs:
+            new_path = os.path.join(path, od)
+            
+            objimage = BlockOBIMV5(self.block_name_length, self.crypt_value)
+            objimage.load_from_file(new_path)
+            self.add_image_block(objimage)
+            
+            objcode = BlockOBCDV5(self.block_name_length, self.crypt_value)
+            objcode.load_from_file(new_path)
+            self.add_code_block(objcode)
+            
     def generate_file_name(self):
         return "scripts"
     
@@ -446,7 +465,7 @@ class BlockLSCRV5(BlockDefaultV5):
 
 class ObjectBlockContainer(object):
     """ Contains objects, which contain image and code blocks."""
-    def __init__(self):
+    def __init__(self, *args, **kwds):
         self.objects = {}
     
     def add_code_block(self, block):
@@ -652,7 +671,7 @@ class BlockOBCDV5(BlockContainerV5):
         block.load_from_resource(resource)
         self.obna = block
         
-        self.obj_name = self.obna.data[:-1].tostring() # cheat
+        self.obj_name = self.obna.obj_name # cheat
 
     def load_from_file(self, path):
         block = BlockCDHDV5(self.block_name_length, self.crypt_value)
@@ -668,7 +687,7 @@ class BlockOBCDV5(BlockContainerV5):
         block.load_from_file(path)
         self.obna = block
         
-        self.obj_name = self.obna.data[:-1].tostring() # cheat
+        self.obj_name = self.obna.obj_name # cheat
         
     def save_to_file(self, path):
         self.verb.save_to_file(path)
@@ -863,17 +882,29 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
                 
     def load_from_file(self, path):
         #global file_dispatcher
-        self.name = os.path.split(path)[1]
-        self.index = 
-        self.children = []
-        
-        file_list = os.listdir(path)
-        
-        file_dispatcher = FileDispatcherV5()
-        for f in file_list:
-            b = file_dispatcher.dispatch_next_block(f)
-            b.load_from_file(os.path.join(path, f))
-            self.children.append(b)
+        name = os.path.split(path)[1]
+        if os.path.splitext(name) == '':
+            self.is_cd_track = False
+            self.name = name.split('_')[0]
+            self.index = name.split('_')[1]
+            self.children = []
+            
+            file_list = os.listdir(path)
+            
+            file_dispatcher = FileDispatcherV5()
+            for f in file_list:
+                b = file_dispatcher.dispatch_next_block(f)
+                if b != None:
+                    b.load_from_file(os.path.join(path, f))
+                    self.children.append(b)
+        else:
+            self.is_cd_track = True
+            self.name = name.split('_')[0]
+            self.index = os.path.splitext(name.split('_')[1])[0]
+            self.children = []
+            self._read_header(block_file, False)
+            self._read_data(block_file, start, False)
+            
 
     def generate_file_name(self):
         name = (self.name 
@@ -911,6 +942,23 @@ class BlockLFLFV5(BlockContainerV5, BlockGloballyIndexedV5):
                          + ("unk_" if self.is_unknown else "")
                          + str(self.index).zfill(3))
         super(BlockLFLFV5, self).save_to_file(path)
+    
+    def load_from_file(self, path):
+        #global file_dispatcher
+        name = os.path.split(path)[1]
+        self.name = name.split('_')[0]
+        self.index = name.split('_')[1]
+        self.children = []
+        
+        file_list = os.listdir(path)
+        
+        file_dispatcher = FileDispatcherV5()
+        for f in file_list:
+            b = file_dispatcher.dispatch_next_block(f)
+            if b != None:
+                b.load_from_file(os.path.join(path, f))
+                self.children.append(b)
+
     
     def generate_file_name(self):
         return (self.name 
@@ -962,7 +1010,20 @@ class AbstractBlockDispatcher(object):
             if re_pattern.match(block_name) != None:
                 return block_type
         return None
-    
+
+class AbstractFileDispatcher(AbstractBlockDispatcher):
+    def dispatch_next_block(self, block_name):
+        print "dispatching next file: " + block_name
+        if block_name in self.BLOCK_MAP:
+            block_type = self.BLOCK_MAP[block_name]            
+        else:
+            block_type = self._dispatch_regex_block(block_name)
+            if block_type is None:
+                print("Ignoring unkown file: " + str(block_name))
+                return None
+        block = block_type(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
+        return block
+
 class BlockDispatcherV5(AbstractBlockDispatcher):
     
     CRYPT_VALUE = 0x69
@@ -1003,7 +1064,7 @@ class BlockDispatcherV5(AbstractBlockDispatcher):
     ]
     DEFAULT_BLOCK = BlockDefaultV5
 
-class FileDispatcherV5(AbstractBlockDispatcher):
+class FileDispatcherV5(AbstractFileDispatcher):
     CRYPT_VALUE = 0x69
     BLOCK_NAME_LENGTH = 4
     BLOCK_MAP = {
@@ -1023,7 +1084,7 @@ class FileDispatcherV5(AbstractBlockDispatcher):
         #r"header\.xml" : BlockRMHDV5, # this could be any header
         r"RMIM" : BlockContainerV5,
         r"objects" : ObjectBlockContainer,
-        r"scripts" : ScriptBlockContainer
+        r"scripts" : ScriptBlockContainer,
         # ---objects (incl. subdirs)
         r"VERB.dmp" : BlockDefaultV5,
         r"SMAP.dmp" : BlockDefaultV5, # also RMIM
@@ -1038,24 +1099,24 @@ class FileDispatcherV5(AbstractBlockDispatcher):
         (re.compile(r"SOUN_[0-9]{3}(?:\.dmp)?"), BlockSOUNV5),
         (re.compile(r"CHAR_[0-9]{3}"), BlockGloballyIndexedV5),
         (re.compile(r"COST_[0-9]{3}"), BlockGloballyIndexedV5),
-        (re.compile(r"SCRP_[0-9]{3}"), BlockDefaultV5)
+        (re.compile(r"SCRP_[0-9]{3}"), BlockDefaultV5),
         # --ROOM
         # ---objects
         (re.compile(r"IM[0-9a-fA-F]{2}"), BlockContainerV5), # also RMIM
         (re.compile(r"ZP[0-9a-fA-F]{2}\.dmp"), BlockDefaultV5), # also RMIM
         # --scripts
-        (re.compile(r"LSCR_[0-9]{3}\.dmp"), blocks.BlockLSCRV5)
+        (re.compile(r"LSCR_[0-9]{3}\.dmp"), BlockLSCRV5)
     ]
     DEFAULT_BLOCK = BlockDefaultV5
 
-class IndexFileDispatcherV5(AbstractBlockDispatcher):
+class IndexFileDispatcherV5(AbstractFileDispatcher):
     CRYPT_VALUE = 0x69
     BLOCK_NAME_LENGTH = 4
     BLOCK_MAP = {
-        r"maxs\.xml" : blocks.BlockMAXSV5,
-        r"roomnames\.xml" : blocks.BlockRNAMV5,
-        r"DOBJ\.dmp" : blocks.BlockDOBJV5,
-        r"DROO\.dmp" : blocks.BlockDefaultV5
+        #r"maxs\.xml" : BlockMAXSV5,
+        #r"roomnames\.xml" : BlockRNAMV5,
+        #r"DOBJ\.dmp" : BlockDOBJV5,
+        #r"DROO\.dmp" : BlockDefaultV5
     }
     REGEX_BLOCKS = [
     ]
@@ -1191,7 +1252,7 @@ class IndexBlockContainerV5(AbstractBlockDispatcher):
             c.save_to_file(path)
         
     
-def __test():
+def __test_unpack():
     global block_dispatcher
     
     outpath = os.getcwd()
@@ -1211,5 +1272,15 @@ def __test():
     resfile.close()
     
     block.save_to_file(outpath)
+
+def __test_pack():
+    global file_dispatcher
+    
+    inpath = os.path.join(os.getcwd(), "LECF")
+    block = BlockLECFV5(4, 0x69)
+    block.load_from_file(inpath)
+
+def __test():
+    __test_pack()
     
 if __name__ == "__main__": __test()
