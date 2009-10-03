@@ -104,8 +104,6 @@ class AbstractBlock(object):
         block_file = file(path, 'rb')
         start = block_file.tell()
         self._read_header(block_file, False)
-        print self.size
-        print self.name
         self._read_data(block_file, start, False)
         block_file.close()
 
@@ -191,7 +189,15 @@ class BlockGloballyIndexedV5(BlockDefaultV5):
         
     def load_from_file(self, path):
         """ Assumes we won't get any 'unknown' blocks, based on the regex in the file walker."""
-        self.index = os.path.split(path)[1][-3:]
+        if os.path.isdir(path):            
+            index = os.path.split(path)[1][-3:]
+        else:
+            fname = os.path.split(path)[1]
+            index = os.path.splitext(fname)[0][-3:]
+        try:
+            self.index = int(index)
+        except ValueError, ve:
+            raise util.ScummPackerException(str(self.index) + " is an invalid index for resource " + path)
         super(BlockGloballyIndexedV5, self).load_from_file(path)
 
     def generate_file_name(self):
@@ -263,11 +269,14 @@ class BlockMIDISoundV5(BlockSoundV5):
     MDHD_DEFAULT_DATA = r"\x4D\x44\x68\x64\x00\x00\x00\x08\x00\x00\x80\x7F\x00\x00\x00\x80"
     
     def load_from_file(self, path):
+        self.name = os.path.splitext(os.path.split(path)[1])[0]
         try:
             mdhd_file = file(os.path.splitext(path)[0] + ".mdhd", 'rb')
             mdhd_data = self._read_raw_data(mdhd_file, self.MDHD_SIZE, decrypt)
         except Exception, e:
-            mmdhd_data = self._generate_mdhd_header()
+            mdhd_data = self._generate_mdhd_header()
+        self.mdhd_header = mdhd_data
+        #self.read_
             
     
     def save_to_file(self, path):
@@ -370,8 +379,8 @@ class BlockROOMV5(BlockContainerV5): # also globally indexed
     def _read_data(self, resource, start, decrypt):
         global block_dispatcher
         end = start + self.size
-        object_container = ObjectBlockContainer()
-        script_container = ScriptBlockContainer()
+        object_container = ObjectBlockContainer(self.block_name_length, self.crypt_value)
+        script_container = ScriptBlockContainer(self.block_name_length, self.crypt_value)
         while resource.tell() < end:
             block = block_dispatcher.dispatch_next_block(resource)
             block.load_from_resource(resource)
@@ -423,18 +432,12 @@ class ScriptBlockContainer(object):
     def load_from_file(self, path):
         file_list = os.listdir(path)
         
-        re_pattern = re.compile(r"[0-9]{3}_.*")
-        object_dirs = [f for f in file_list if re_pattern.match(f) != None]
-        for od in object_dirs:
-            new_path = os.path.join(path, od)
-            
-            objimage = BlockOBIMV5(self.block_name_length, self.crypt_value)
-            objimage.load_from_file(new_path)
-            self.add_image_block(objimage)
-            
-            objcode = BlockOBCDV5(self.block_name_length, self.crypt_value)
-            objcode.load_from_file(new_path)
-            self.add_code_block(objcode)
+        file_dispatcher = FileDispatcherV5()
+        for f in file_list:
+            b = file_dispatcher.dispatch_next_block(f)
+            if b != None:
+                b.load_from_file(os.path.join(path, f))
+                self.append(b)
             
     def generate_file_name(self):
         return "scripts"
@@ -465,8 +468,10 @@ class BlockLSCRV5(BlockDefaultV5):
 
 class ObjectBlockContainer(object):
     """ Contains objects, which contain image and code blocks."""
-    def __init__(self, *args, **kwds):
+    def __init__(self, block_name_length, crypt_value, *args, **kwds):
         self.objects = {}
+        self.block_name_length = block_name_length
+        self.crypt_value = crypt_value
     
     def add_code_block(self, block):
         if not block.obj_id in self.objects:
@@ -520,7 +525,7 @@ class ObjectBlockContainer(object):
         et.SubElement(obcd, "actor_dir").text = str(objcode.cdhd.actor_dir)
 
         util.indent_elementtree(root)
-        et.ElementTree(root).write(os.path.join(path, "header.xml"))
+        et.ElementTree(root).write(os.path.join(path, "OBHD.xml"))
 
     
     def load_from_file(self, path):
@@ -568,7 +573,7 @@ class BlockOBIMV5(BlockContainerV5):
     def load_from_file(self, path):
         # Load the header
         block = BlockIMHDV5(self.block_name_length, self.crypt_value)
-        block.load_from_file(path)
+        block.load_from_file(os.path.join(path, "OBHD.xml"))
         self.obj_id = block.obj_id
         self.imhd = block
         
@@ -630,7 +635,7 @@ class BlockIMHDV5(BlockDefaultV5):
         self._load_header_from_xml(path)
         
     def _load_header_from_xml(self, path):
-        tree = et.parse(os.path.join(path, "header.xml"))
+        tree = et.parse(path)
         root = tree.getroot()
         
         # Shared
@@ -651,7 +656,7 @@ class BlockIMHDV5(BlockDefaultV5):
         self.unknown = int(obcd_node.find("parent").text) # almost certainly wrong
         
     def save_to_file(self, path):
-        """ Combined header.xml is saved in the ObjectBlockContainer."""
+        """ Combined OBHD.xml is saved in the ObjectBlockContainer."""
         pass
 
     
@@ -675,7 +680,7 @@ class BlockOBCDV5(BlockContainerV5):
 
     def load_from_file(self, path):
         block = BlockCDHDV5(self.block_name_length, self.crypt_value)
-        block.load_from_file(path)
+        block.load_from_file(os.path.join(path, "OBHD.xml"))
         self.obj_id = block.obj_id # maybe should handle header info better
         self.cdhd = block
         
@@ -684,7 +689,7 @@ class BlockOBCDV5(BlockContainerV5):
         self.verb = block
         
         block = BlockOBNAV5(self.block_name_length, self.crypt_value)
-        block.load_from_file(path)
+        block.load_from_file(os.path.join(path, "OBHD.xml"))
         self.obna = block
         
         self.obj_name = self.obna.obj_name # cheat
@@ -708,11 +713,14 @@ class BlockOBNAV5(BlockDefaultV5):
         self.size = len(self.obj_name) + 1 + 8
     
     def _load_header_from_xml(self, path):
-        tree = et.parse(os.path.join(path, "header.xml"))
+        tree = et.parse(path)
         root = tree.getroot()
         
         # Shared
-        self.obj_name = util.unescape_invalid_chars(root.find("name").text)
+        name = root.find("name").text
+        if name == None:
+            name = ''
+        self.obj_name = util.unescape_invalid_chars(name)
         
     #def save_to_resource(self, path):
     #    write object name + "\x00"
@@ -749,7 +757,8 @@ class BlockCDHDV5(BlockDefaultV5):
         self._load_header_from_xml(path)
         
     def _load_header_from_xml(self, path):
-        tree = et.parse(os.path.join(path, "header.xml"))
+        #tree = et.parse(os.path.join(path, "header.xml"))
+        tree = et.parse(path)
         root = tree.getroot()
         
         # Shared
@@ -790,8 +799,9 @@ class BlockRMHDV5(BlockDefaultV5):
         self.size = 6 + 8
         self._load_header_from_xml(path)
 
-    def _load_header_from_xml(path):
-        tree = et.parse(os.path.join(path, "header.xml"))
+    def _load_header_from_xml(self, path):
+        #tree = et.parse(os.path.join(path, "header.xml"))
+        tree = et.parse(path)
         root = tree.getroot()
         
         self.width = int(root.find("width").text)
@@ -806,7 +816,7 @@ class BlockRMHDV5(BlockDefaultV5):
         et.SubElement(root, "num_objects").text = str(self.num_objects)
         
         util.indent_elementtree(root)
-        et.ElementTree(root).write(os.path.join(path, "header.xml"))
+        et.ElementTree(root).write(os.path.join(path, "RMHD.xml"))
 
 class BlockRMIHV5(BlockDefaultV5):
     def _read_data(self, resource, start, decrypt):
@@ -829,8 +839,9 @@ class BlockRMIHV5(BlockDefaultV5):
         self.size = 1 + 8
         self._load_header_from_xml(path)
 
-    def _load_header_from_xml(path):
-        tree = et.parse(os.path.join(path, "header.xml"))
+    def _load_header_from_xml(self, path):
+        #tree = et.parse(os.path.join(path, "header.xml"))
+        tree = et.parse(path)
         root = tree.getroot()
         
         self.num_zbuffers = int(root.find("num_zbuffers").text)
@@ -841,7 +852,7 @@ class BlockRMIHV5(BlockDefaultV5):
         et.SubElement(root, "num_zbuffers").text = str(self.num_zbuffers)
         
         util.indent_elementtree(root)
-        et.ElementTree(root).write(os.path.join(path, "header.xml"))
+        et.ElementTree(root).write(os.path.join(path, "RMIH.xml"))
         
         
 class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
@@ -883,7 +894,7 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
     def load_from_file(self, path):
         #global file_dispatcher
         name = os.path.split(path)[1]
-        if os.path.splitext(name) == '':
+        if os.path.splitext(name)[1] == '':
             self.is_cd_track = False
             self.name = name.split('_')[0]
             self.index = name.split('_')[1]
@@ -902,8 +913,10 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
             self.name = name.split('_')[0]
             self.index = os.path.splitext(name.split('_')[1])[0]
             self.children = []
-            self._read_header(block_file, False)
-            self._read_data(block_file, start, False)
+            soun_file = file(path, 'rb')
+            self._read_header(soun_file, False)
+            self._read_data(soun_file, 0, False)
+            soun_file.close()
             
 
     def generate_file_name(self):
@@ -1081,16 +1094,25 @@ class FileDispatcherV5(AbstractFileDispatcher):
         r"EPAL.dmp" : BlockDefaultV5,
         r"SCAL.dmp" : BlockDefaultV5,
         r"TRNS.dmp" : BlockDefaultV5,
-        #r"header\.xml" : BlockRMHDV5, # this could be any header
+        r"RMHD.xml" : BlockRMHDV5,
         r"RMIM" : BlockContainerV5,
         r"objects" : ObjectBlockContainer,
         r"scripts" : ScriptBlockContainer,
+        # ---RMIM
+        r"RMIH.xml" : BlockRMIHV5,
         # ---objects (incl. subdirs)
         r"VERB.dmp" : BlockDefaultV5,
         r"SMAP.dmp" : BlockDefaultV5, # also RMIM
         # ---scripts
         r"ENCD.dmp" : BlockDefaultV5,
         r"EXCD.dmp" : BlockDefaultV5,
+        # - Sound blocks
+        r"SOU" : BlockSOUV5,
+        r"ROL.mid" : BlockMIDISoundV5,
+        r"SPK.mid" : BlockMIDISoundV5,
+        r"ADL.mid" : BlockMIDISoundV5,
+        r"SBL.mid" : BlockSBLV5,
+        
     }
     REGEX_BLOCKS = [
         # LECF
@@ -1099,7 +1121,7 @@ class FileDispatcherV5(AbstractFileDispatcher):
         (re.compile(r"SOUN_[0-9]{3}(?:\.dmp)?"), BlockSOUNV5),
         (re.compile(r"CHAR_[0-9]{3}"), BlockGloballyIndexedV5),
         (re.compile(r"COST_[0-9]{3}"), BlockGloballyIndexedV5),
-        (re.compile(r"SCRP_[0-9]{3}"), BlockDefaultV5),
+        (re.compile(r"SCRP_[0-9]{3}"), BlockGloballyIndexedV5),
         # --ROOM
         # ---objects
         (re.compile(r"IM[0-9a-fA-F]{2}"), BlockContainerV5), # also RMIM
@@ -1279,8 +1301,16 @@ def __test_pack():
     inpath = os.path.join(os.getcwd(), "LECF")
     block = BlockLECFV5(4, 0x69)
     block.load_from_file(inpath)
+    
+    print block
+    
+    outpath = os.path.join(os.getcwd(), "outtest")
+    #os.mkdir(outpath)
+    
+    block.save_to_file(outpath)
 
 def __test():
+    #__test_unpack()
     __test_pack()
     
 if __name__ == "__main__": __test()
