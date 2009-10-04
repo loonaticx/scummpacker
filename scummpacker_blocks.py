@@ -266,18 +266,21 @@ class BlockMIDISoundV5(BlockSoundV5):
     """ Saves the MDhd header data to a .mhd file, saves the rest of the block 
     to a .mid file."""
     MDHD_SIZE = 16
-    MDHD_DEFAULT_DATA = r"\x4D\x44\x68\x64\x00\x00\x00\x08\x00\x00\x80\x7F\x00\x00\x00\x80"
+    MDHD_DEFAULT_DATA = "\x4D\x44\x68\x64\x00\x00\x00\x08\x00\x00\x80\x7F\x00\x00\x00\x80"
     
     def load_from_file(self, path):
         self.name = os.path.splitext(os.path.split(path)[1])[0]
         try:
             mdhd_file = file(os.path.splitext(path)[0] + ".mdhd", 'rb')
             mdhd_data = self._read_raw_data(mdhd_file, self.MDHD_SIZE, decrypt)
+            mdhd_file.close()
         except Exception, e:
             mdhd_data = self._generate_mdhd_header()
         self.mdhd_header = mdhd_data
-        #self.read_
-            
+        self.size = os.path.getsize(path)
+        midi_file = file(path, 'rb')
+        self._read_data(midi_file, 0, False)
+        midi_file.close()
     
     def save_to_file(self, path):
         # Possibly the only MDhd block that is different:
@@ -316,10 +319,11 @@ class BlockSBLV5(BlockSoundV5):
 
     def load_from_file(self, path):
         # TODO: open file etc
-        voc_file = file(os.path.join(path, "SBL.voc"), 'rb')
-        self.size = len(voc_file) - 0x1A + 27 # ignore VOC header, add SBL block header (could just +1)
+        self.name = os.path.splitext(os.path.split(path)[1])[0]
+        self.size = os.path.getsize(path) - 0x1A + 27 # ignore VOC header, add SBL block header (could just +1)
+        voc_file = file(path, 'rb')
         voc_file.seek(0x1A, os.SEEK_CUR)
-        self._read_raw_data(voc_file, 0, False)
+        self.data = self._read_raw_data(voc_file, self.size - 27, False)
         voc_file.close()
         
     def save_to_file(self, path):
@@ -1111,7 +1115,7 @@ class FileDispatcherV5(AbstractFileDispatcher):
         r"ROL.mid" : BlockMIDISoundV5,
         r"SPK.mid" : BlockMIDISoundV5,
         r"ADL.mid" : BlockMIDISoundV5,
-        r"SBL.mid" : BlockSBLV5,
+        r"SBL.voc" : BlockSBLV5,
         
     }
     REGEX_BLOCKS = [
