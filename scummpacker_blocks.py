@@ -73,6 +73,11 @@ class AbstractBlock(object):
         self._read_header(resource, True)
         self._read_data(resource, start, True)
 
+    def save_to_resource(self, resource, room_start=0):
+        start = resource.tell()
+        self._write_header(resource, True)
+        self._read_data(resource, start, True)
+        
     def _read_header(self, resource, decrypt):
         # Different in old format resources
         raise NotImplementedError("This method must be overriden by a concrete class.")
@@ -1314,7 +1319,7 @@ def __test_pack():
     block.save_to_file(outpath)
 
 def __test():
-    #__test_unpack()
-    __test_pack()
+    __test_unpack()
+    #__test_pack()
     
 if __name__ == "__main__": __test()
