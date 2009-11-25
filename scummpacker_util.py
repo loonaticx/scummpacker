@@ -94,8 +94,23 @@ def indent_elementtree(elem, level=0):
         if level and (not elem.tail or not elem.tail.strip()):
             elem.tail = i
 
+def ordered_sort(in_list, order):
+    """ Takes a list of values and a list containing the order of those values. Wait,
+    this is retarded. Don't use it."""
+    # This is a bit silly; could probably just use keys from "order" instead of
+    #  sorting at all.
+    INFINITY = len(in_list) # append unrecognised values to end
+    deco = [ ((order.index(v) if v in order else INFINITY), i, v) for i, v in enumerate(in_list) ]
+    deco.sort()
+    return [ v for _, _, v in deco ]
+
 class ScummPackerException(Exception):
     pass
 
 class ScummPackerUnrecognisedIndexException(ScummPackerException):
     pass
+
+m = [101, 102, 103, 104, 107, 106, 105]
+o = [105, 104, 101, 102, 103]
+
+print ordered_sort(m, o)

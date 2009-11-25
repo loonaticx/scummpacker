@@ -1,17 +1,16 @@
+from __future__ import with_statement # bleh
 import array
 import os
 import re
 import struct
+import sys
 import xml.etree.ElementTree as et
 import scummpacker_control as control
 import scummpacker_util as util
 
-block_order_index_v5 = [
-    
-]
+if sys.version_info[0] < 2 or (sys.version_info[0] == 2 and sys.version_info[1] < 5):
+    raise util.ScummPackerException("ScummPacker requires Python 2.5 or higher.")
 
-# DELETE THIS
-# order is hardcoded and implicit in the s
 block_order_res_v5 = [
     "LOFF",
     "LFLF",
@@ -33,20 +32,23 @@ block_order_res_v5 = [
      "RMIH",
      "IM", # IMxx
       #Inside IMxx
-      "SMAP"
-      "ZP" # ZPxx
+      "SMAP",
+      "ZP", # ZPxx
+    "objects",
     "OBIM",
      #Inside OBIM
      "IMHD",
      "IM",
       #Inside IMxx
-      "SMAP"
-      "ZP" # ZPxx
+      "SMAP",
+      "BOMP", # appears in object 1045 in MI1CD.
+      "ZP", # ZPxx
     "OBCD",
      #Inside OBCD
      "CDHD",
      "VERB",
      "OBNA",
+    "scripts",
     "EXCD",
     "ENCD",
     "NLSC",
@@ -55,6 +57,17 @@ block_order_res_v5 = [
     # Inside LFLF
     "SCRP",
     "SOUN",
+     # Inside SOUN
+     "SOU",
+     "SOU ",
+     "ROL",
+     "ROL ",
+     "SBL",
+     "SBL ",
+     "ADL",
+     "ADL ",
+     "SPK",
+     "SPK ",
     "COST",
     "CHAR"
 ]
@@ -74,9 +87,9 @@ class AbstractBlock(object):
         self._read_data(resource, start, True)
 
     def save_to_resource(self, resource, room_start=0):
-        start = resource.tell()
+        #start = resource.tell()
         self._write_header(resource, True)
-        self._read_data(resource, start, True)
+        self._write_data(resource, True)
         
     def _read_header(self, resource, decrypt):
         # Different in old format resources
@@ -122,6 +135,10 @@ class AbstractBlock(object):
         # Different in old format resources
         raise NotImplementedError("This method must be overriden by a concrete class.")
 
+    def _write_dummy_header(self, outfile, encrypt):
+        """Writes placeholder information (block name, block size of 0)"""
+        raise NotImplementedError("This method must be overriden by a concrete class.")
+
     def _write_data(self, outfile, encrypt):
         self._write_raw_data(outfile, encrypt)
 
@@ -150,6 +167,13 @@ class BlockDefaultV5(AbstractBlock):
         size = util.int_to_str(self.size, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
         outfile.write(size)
 
+    def _write_dummy_header(self, outfile, encrypt):
+        """Writes placeholder information (block name, block size of 0)"""
+        name = util.crypt(self.name, self.crypt_value) if encrypt else self.name
+        outfile.write(name)
+        size = util.int_to_str(0, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
+        outfile.write(size)
+
 
 class BlockSoundV5(BlockDefaultV5):
     """ Sound blocks store incorrect block size (it doesn't include the SOU/ADL/SBL header size)"""
@@ -160,9 +184,22 @@ class BlockSoundV5(BlockDefaultV5):
         return util.str_to_int(size, is_BE=util.BE) + 8
     
     def _write_header(self, outfile, encrypt):
-        name = util.crypt(self.name, self.crypt_value) if encrypt else self.name
+        name = self.name
+        if len(name) == 3:
+            name = name + " "
+        name = util.crypt(name, self.crypt_value) if encrypt else name
         outfile.write(name)
         size = util.int_to_str(self.size - 8, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
+        outfile.write(size)
+
+    def _write_dummy_header(self, outfile, encrypt):
+        """Writes placeholder information (block name, block size of 0)"""
+        name = self.name
+        if len(name) == 3:
+            name = name + " "
+        name = util.crypt(name, self.crypt_value) if encrypt else name
+        outfile.write(name)
+        size = util.int_to_str(0, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
         outfile.write(size)
     
     def generate_file_name(self):
@@ -191,7 +228,23 @@ class BlockGloballyIndexedV5(BlockDefaultV5):
                        + "It can not be re-packed or used in the game.")
             self.is_unknown = True
             self.index = control.unknown_blocks_counter.get_next_index(self.name)
-        
+
+    def save_to_resource(self, resource, room_start=0):
+        # Look up the start of the current ROOM block, store
+        # a mapping of this block's index and room #/offset.
+        # Later on, our directories will just treat global_index_map as a list of
+        # tables and go through all of the values.
+        location = resource.tell()
+        #util.debug("Saving globally indexed block: " + self.name)
+        #util.debug("LFLF: " + str(control.global_index_map.items("LFLF")))
+        #util.debug("ROOM: " + str(control.global_index_map.items("ROOM")))
+        room_num = control.global_index_map.get_index("LFLF", room_start)
+        room_offset = control.global_index_map.get_index("ROOM", room_num)
+        control.global_index_map.map_index(self.name,
+                                           (room_num, location - room_offset),
+                                           self.index)
+        super(BlockGloballyIndexedV5, self).save_to_resource(resource, room_start)
+
     def load_from_file(self, path):
         """ Assumes we won't get any 'unknown' blocks, based on the regex in the file walker."""
         if os.path.isdir(path):            
@@ -212,7 +265,6 @@ class BlockGloballyIndexedV5(BlockDefaultV5):
                 + str(self.index).zfill(3) + ".dmp")
     
     def __repr__(self):
-        
         return "[" + self.name + ":" + ("unk_" if self.is_unknown else "") + str(self.index).zfill(3) + "]"
 
     
@@ -230,6 +282,26 @@ class BlockContainerV5(BlockDefaultV5):
             self.append(block)
     
     def append(self, block):
+        # Maintain sorted order for children
+        #TODO: use bisect module for sorted insertion?
+        global block_order_res_v5
+        rank_lookup_name = block.name
+        # dumb crap here but I'm sick of working on this crappy piece of software
+        if rank_lookup_name[:2] == "ZP" or rank_lookup_name[:2] == "IM":
+            rank_lookup_name = rank_lookup_name[:2]
+        #util.debug("Appending block: " + str(rank_lookup_name))
+        block_rank = block_order_res_v5.index(rank_lookup_name)
+        for i, c in enumerate(self.children):
+            c_rank_lookup_name = c.name
+            if c_rank_lookup_name[:2] == "ZP" or c_rank_lookup_name[:2] == "IM":
+                c_rank_lookup_name = c_rank_lookup_name[:2]
+            #util.debug("Comparing block: " + str(c_rank_lookup_name))
+            c_rank = block_order_res_v5.index(c_rank_lookup_name)
+            if c_rank > block_rank:
+                #util.debug("rank_lookup_name: " + str(rank_lookup_name) + ", c_rank: " + str(c_rank) + ", block_rank: " + str(block_rank))
+                self.children.insert(i, block)
+                return
+        #util.debug("appending block, rank_lookup_name: " + str(rank_lookup_name) + ", block_rank: " + str(block_rank))
         self.children.append(block)
     
     def save_to_file(self, path):
@@ -247,7 +319,7 @@ class BlockContainerV5(BlockDefaultV5):
             child.save_to_file(path)
         
     def load_from_file(self, path):
-        #global file
+        #global file_dispatcher #TODO?
         self.name = os.path.split(path)[1]
         self.children = []
         
@@ -258,8 +330,33 @@ class BlockContainerV5(BlockDefaultV5):
             b = file_dispatcher.dispatch_next_block(f)
             if b != None:
                 b.load_from_file(os.path.join(path, f))
-                self.children.append(b)
-    
+                self.append(b)
+
+    def save_to_resource(self, resource, room_start=0):
+        start = resource.tell()
+
+        # write dummy header
+        self._write_dummy_header(resource, True)
+        # process children
+        for c in self.children:
+            c.save_to_resource(resource, room_start)
+        
+        # go back and write size of block
+        end = resource.tell()
+        self.size = end - start
+        resource.flush()
+        resource.seek(start, os.SEEK_SET)
+        self._write_header(resource, True)
+        resource.seek(end, os.SEEK_SET)
+
+    def sort_children(self):
+        """Ensures that children are stored & processed in the correct order."""
+        global block_order_res_v5
+        cmp_method = lambda x,y: cmp(block_order_res_v5.index(x.name),
+                                     block_order_res_v5.index(y.name))
+        self.children.sort(cmp=cmp_method)
+        return
+
     def generate_file_name(self):
         return self.name
     
@@ -277,12 +374,12 @@ class BlockMIDISoundV5(BlockSoundV5):
         self.name = os.path.splitext(os.path.split(path)[1])[0]
         try:
             mdhd_file = file(os.path.splitext(path)[0] + ".mdhd", 'rb')
-            mdhd_data = self._read_raw_data(mdhd_file, self.MDHD_SIZE, decrypt)
+            mdhd_data = self._read_raw_data(mdhd_file, self.MDHD_SIZE, False)
             mdhd_file.close()
         except Exception, e:
             mdhd_data = self._generate_mdhd_header()
         self.mdhd_header = mdhd_data
-        self.size = os.path.getsize(path)
+        self.size = os.path.getsize(path) # size does not include ADL/ROL block header
         midi_file = file(path, 'rb')
         self._read_data(midi_file, 0, False)
         midi_file.close()
@@ -291,17 +388,35 @@ class BlockMIDISoundV5(BlockSoundV5):
         # Possibly the only MDhd block that is different:
         # MI1CD\LECF\LFLF_011\SOUN_043\SOU
         # 4D44 6864 0000 0008 0000 FF7F 0000 0080
-        outfile = file(os.path.join(path, self.generate_file_name() + ".mhd"), 'wb')
-        self._write_mdhd_header(outfile, False)
-        outfile.close()
+        if self.mdhd_header != self.MDHD_DEFAULT_DATA:
+            outfile = file(os.path.join(path, self.generate_file_name() + ".mhd"), 'wb')
+            self._write_mdhd_header(outfile, False)
+            outfile.close()
         outfile = file(os.path.join(path, self.generate_file_name() + ".mid"), 'wb')
         self._write_data(outfile, False)
         outfile.close()
-    
+
+    def save_to_resource(self, resource, room_start=0):
+        self._write_header(resource, True)
+        self._write_mdhd_header(resource, True)
+        self._write_data(resource, True)
+
     def _read_header(self, resource, decrypt):
+        """ Also reads the MDHD header."""
         super(BlockMIDISoundV5, self)._read_header(resource, decrypt)
         self.mdhd_header = self._read_raw_data(resource, self.MDHD_SIZE, decrypt)
     
+    def _write_header(self, outfile, encrypt):
+        """ Hack to support adding of MDHD header size."""
+        name = self.name
+        if len(name) == 3:
+            name = name + " "
+        name = util.crypt(name, self.crypt_value) if encrypt else name
+        outfile.write(name)
+        size = self.size + self.MDHD_SIZE # size includes MDHD header, does not include ADL/ROL block header
+        size = util.int_to_str(size, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
+        outfile.write(size)
+
     def _write_mdhd_header(self, outfile, encrypt):
         outfile.write(util.crypt(self.mdhd_header, (self.crypt_value if encrypt else None)))
 
@@ -309,9 +424,10 @@ class BlockMIDISoundV5(BlockSoundV5):
         return array.array('B', self.MDHD_DEFAULT_DATA)
 
 class BlockSOUV5(BlockSoundV5, BlockContainerV5):
-    pass
+    name = "SOU"
 
 class BlockSBLV5(BlockSoundV5):
+    name = "SBL"
     AU_HEADER = "AUhd\x00\x00\x00\x03\x00\x00\x80AUdt"
     
     def _read_data(self, resource, start, decrypt):
@@ -323,7 +439,6 @@ class BlockSBLV5(BlockSoundV5):
         super(BlockSBLV5, self)._read_data(resource, start, decrypt)
 
     def load_from_file(self, path):
-        # TODO: open file etc
         self.name = os.path.splitext(os.path.split(path)[1])[0]
         self.size = os.path.getsize(path) - 0x1A + 27 # ignore VOC header, add SBL block header (could just +1)
         voc_file = file(path, 'rb')
@@ -333,22 +448,22 @@ class BlockSBLV5(BlockSoundV5):
         
     def save_to_file(self, path):
         outfile = file(os.path.join(path, self.generate_file_name()), 'wb')
-        self._write_VOC_header(outfile, False)
+        self._write_voc_header(outfile, False)
         self._write_data(outfile, False)
         outfile.close()
 
-    def save_to_resource(self, resource):
+    def save_to_resource(self, resource, room_start=0):
         self._write_header(resource, True)
-        self._write_AUhd_header(resource, True)
+        self._write_auhd_header(resource, True)
         self._write_data(resource, True)
         
-    def _write_AUhd_header(self, outfile, encrypt):
+    def _write_auhd_header(self, outfile, encrypt):
         voc_size = self.size - 27 # ignore all header info for size
-        au_header = AU_HEADER + util.str_to_int(voc_size, is_BE=True)
-        au_header = (util.crypt(au_header if encrypt else au_header))
+        au_header = BlockSBLV5.AU_HEADER + util.int_to_str(voc_size, 4, util.BE, None)
+        au_header = (util.crypt(au_header, self.crypt_value if encrypt else None))
         outfile.write(au_header)
         
-    def _write_VOC_header(self, outfile, encrypt):
+    def _write_voc_header(self, outfile, encrypt):
         """
         SBL block strips the "Creative Voice File" header information, so we
         have to restore it. Thankfully there's not much there except for the
@@ -377,6 +492,8 @@ class BlockSBLV5(BlockSoundV5):
         return self.name.rstrip() + ".voc"
 
 class BlockROOMV5(BlockContainerV5): # also globally indexed
+    name = "ROOM"
+
     def __init__(self, *args, **kwds):
         super(BlockROOMV5, self).__init__(*args, **kwds)
         self.script_types = frozenset(["ENCD", 
@@ -406,8 +523,18 @@ class BlockROOMV5(BlockContainerV5): # also globally indexed
                 self.append(block)
         self.append(object_container)
         self.append(script_container)
+
+    def save_to_resource(self, resource, room_start=0):
+        location = resource.tell()
+        #util.debug("Saving ROOM")
+        #print control.global_index_map.items("ROOM")
+        room_num = control.global_index_map.get_index("LFLF", room_start)
+        control.global_index_map.map_index("ROOM", room_num, location)
+        super(BlockROOMV5, self).save_to_resource(resource, room_start)
     
 class BlockLOFFV5(BlockDefaultV5):
+    name = "LOFF"
+
     def _read_data(self, resource, start, decrypt):
         num_rooms = util.str_to_int(resource.read(1), 
                                     crypt_val=(self.crypt_value if decrypt else None))
@@ -422,21 +549,92 @@ class BlockLOFFV5(BlockDefaultV5):
             control.global_index_map.map_index("ROOM", room_no, room_offset) # HACK
 
     def save_to_file(self, path):
-        pass
+        """Don't need to save offsets since they're calculated when packing."""
+        return
+
+    def save_to_resource(self, resource, room_start=0):
+        """This method should only be called after write_dummy_block has been invoked,
+        otherwise this block may have no size attribute initialised."""
+        # Write name/size (probably again, since write_dummy_block also writes it)
+        self._write_header(resource, True)
+        # Write number of rooms, followed by offset table
+        # Possible inconsistency, in that this uses the global index map for ROOM blocks,
+        #  whereas the "write_dummy_block" just looks at the number passed in, which
+        #  comes from the number of entries in the file system.
+        room_table = sorted(control.global_index_map.items("ROOM"))
+        num_of_rooms = len(room_table)
+        resource.write(util.int_to_str(num_of_rooms, 1, util.LE, self.crypt_value))
+        for room_num, room_offset in room_table:
+            room_num = int(room_num)
+            resource.write(util.int_to_str(room_num, 1, util.LE, self.crypt_value))
+            resource.write(util.int_to_str(room_offset, 4, util.LE, self.crypt_value))
+
+    def write_dummy_block(self, resource, num_rooms):
+        """This method should be called before save_to_resource. It just
+        reserves space until the real block is written.
+
+        The reason for doing this is that the block begins at the start of the
+        resource file, but contains the offsets of all of the room blocks, which
+        won't be known until after they've all been written."""
+        block_start = resource.tell()
+        self._write_dummy_header(resource, True)
+        resource.write(util.int_to_str(num_rooms, 1, util.BE, self.crypt_value))
+        for i in xrange(num_rooms):
+            resource.write("\x00" * 5)
+        block_end = resource.tell()
+        self.size = block_end - block_start
 
 class ScriptBlockContainer(object):
-    def __init__(self, *args, **kwds):
-        self.scripts = []
+    script_types = frozenset(["ENCD", "EXCD", "LSCR"])
+
+    def __init__(self, block_name_length, crypt_value, *args, **kwds):
+        self.local_scripts = []
+        self.encd_script = None
+        self.excd_script = None
+        self.block_name_length = block_name_length
+        self.crypt_value = crypt_value
+        self.name = "scripts"
     
     def append(self, block):
-        self.scripts.append(block)
+        # Would be nice to compare them using self.script_types or similar...
+        if block.name == "LSCR":
+            self.local_scripts.append(block)
+        elif block.name == "ENCD":
+            self.encd_script = block
+        elif block.name == "EXCD":
+            self.excd_script = block
+        else:
+            raise util.ScummPackerException("Unrecognised script type: " + str(block.name))
     
     def save_to_file(self, path):
         newpath = os.path.join(path, self.generate_file_name())
         if not os.path.isdir(newpath):
             os.mkdir(newpath) # throws an exception if can't create dir
-        for s in self.scripts:
+        if self.encd_script:
+            self.encd_script.save_to_file(newpath)
+        if self.excd_script:
+            self.excd_script.save_to_file(newpath)
+        for s in self.local_scripts:
             s.save_to_file(newpath)
+
+    def save_to_resource(self, resource, room_start=0):
+        # Determine the number of local scripts (LSCR)
+        num_local_scripts = len(self.local_scripts)
+        # Write ENCD, EXCD blocks (seperate from LSCRs)
+        if not self.encd_script or not self.excd_script:
+            room_num = control.global_index_map.get_index("LFLF", room_start)
+            raise util.ScummPackerException(
+                "Room #" + str(room_num) + " appears to be missing either a room entry or exit script.")
+        self.excd_script.save_to_resource(resource, room_start)
+        self.encd_script.save_to_resource(resource, room_start)
+        # Generate and write NLSC block (could be prettier, should have its own class)
+        resource.write(util.crypt("NLSC", self.crypt_value))
+        resource.write(util.int_to_str(10, 4, util.BE, self.crypt_value)) # size of this block is always 10
+        resource.write(util.int_to_str(num_local_scripts, 2, util.LE, self.crypt_value))
+        # Write all LSCRs sorted by script number
+        self.local_scripts.sort(cmp=lambda x,y: cmp(x.script_id, y.script_id))
+        for s in self.local_scripts:
+            s.save_to_resource(resource, room_start)
 
     def load_from_file(self, path):
         file_list = os.listdir(path)
@@ -444,7 +642,7 @@ class ScriptBlockContainer(object):
         file_dispatcher = FileDispatcherV5()
         for f in file_list:
             b = file_dispatcher.dispatch_next_block(f)
-            if b != None:
+            if b != None: #and self.script_types: #TODO: only load recognised scripts
                 b.load_from_file(os.path.join(path, f))
                 self.append(b)
             
@@ -452,11 +650,13 @@ class ScriptBlockContainer(object):
         return "scripts"
     
     def __repr__(self):
-        childstr = [str(c) for c in self.scripts]
+        childstr = [str(self.encd_script), str(self.excd_script)]
+        childstr.extend([str(c) for c in self.local_scripts])
         return "[Scripts, " + ", ".join(childstr) + "]"
 
-
 class BlockLSCRV5(BlockDefaultV5):
+    name = "LSCR"
+
     def _read_data(self, resource, start, decrypt):
         script_id = resource.read(1)
         if decrypt:
@@ -476,11 +676,16 @@ class BlockLSCRV5(BlockDefaultV5):
         
 
 class ObjectBlockContainer(object):
+    OBJ_ID_LENGTH = 4
+
     """ Contains objects, which contain image and code blocks."""
     def __init__(self, block_name_length, crypt_value, *args, **kwds):
         self.objects = {}
         self.block_name_length = block_name_length
         self.crypt_value = crypt_value
+        self.name = "objects"
+        self.obim_order = None # hacks to preserve order of object blocks
+        self.obcd_order = None
     
     def add_code_block(self, block):
         if not block.obj_id in self.objects:
@@ -497,12 +702,46 @@ class ObjectBlockContainer(object):
         if not os.path.isdir(objects_path):
             os.mkdir(objects_path) # throws an exception if can't create dir
         for objimage, objcode in self.objects.values():
-            newpath = os.path.join(objects_path, str(objcode.obj_id) + "_" + util.discard_invalid_chars(objcode.obj_name))
+            newpath = os.path.join(objects_path, str(objcode.obj_id).zfill(self.OBJ_ID_LENGTH) + "_" + util.discard_invalid_chars(objcode.obj_name))
             if not os.path.isdir(newpath):
                 os.mkdir(newpath) # throws an exception if can't create dir
             objimage.save_to_file(newpath)
             objcode.save_to_file(newpath)
             self._save_header_to_xml(newpath, objimage, objcode)
+
+    def save_to_resource_old(self, resource, room_start=0):
+        object_entries = self.objects.items()
+        # NOTE: although we sort by object ID, original resources don't seem
+        # to be fussy. See: MI1 CD, room 2, object 36 - the sequence for
+        # images is object 31, 32, 33... but the sequence for codes
+        # is object 31, 36, 32...!
+        #util.ordered_sort(object_entries, self.obim_order)
+        object_entries.sort() # sort by object id
+        # TODO: keep track of where objects are written in the resource
+        # Write all image blocks first
+        for obj_id, (objimage, objcode) in object_entries:
+            #util.debug("Writing object image: " + str(obj_id))
+            objimage.save_to_resource(resource, room_start)
+        # Then write all object code/names
+        for obj_id, (objimage, objcode) in object_entries:
+            #util.debug("Writing object code: " + str(objcode.obj_id))
+            objcode.save_to_resource(resource, room_start)
+
+    def save_to_resource(self, resource, room_start=0):
+        # TODO: keep track of where objects are written in the resource
+        object_keys = self.objects.keys()
+        
+        # Write all image blocks first
+        util.ordered_sort(object_keys, self.obim_order)
+        for obj_id in object_keys:
+            #util.debug("Writing object image: " + str(obj_id))
+            self.objects[obj_id][0].save_to_resource(resource, room_start)
+
+        # Then write all object code/names
+        util.ordered_sort(object_keys, self.obcd_order)
+        for obj_id in object_keys:
+            #util.debug("Writing object code: " + str(objcode.obj_id))
+            self.objects[obj_id][1].save_to_resource(resource, room_start)
 
     def _save_header_to_xml(self, path, objimage, objcode):
         # Save the joined header information as XML
@@ -511,13 +750,15 @@ class ObjectBlockContainer(object):
         #shared = et.SubElement(root, "shared")
         et.SubElement(root, "name").text = util.escape_invalid_chars(objcode.obj_name)
         et.SubElement(root, "id").text = str(objcode.obj_id)
-        et.SubElement(root, "x").text = str(objcode.cdhd.x)
-        et.SubElement(root, "y").text = str(objcode.cdhd.y)
-        et.SubElement(root, "width").text = str(objcode.cdhd.width)
-        et.SubElement(root, "height").text = str(objcode.cdhd.height)
         
         # OBIM
         obim = et.SubElement(root, "image")
+        et.SubElement(obim, "x").text = str(objimage.imhd.x)
+        et.SubElement(obim, "y").text = str(objimage.imhd.y)
+        et.SubElement(obim, "width").text = str(objimage.imhd.width)
+        et.SubElement(obim, "height").text = str(objimage.imhd.height)
+        et.SubElement(obim, "flags").text = str(objimage.imhd.flags)
+        et.SubElement(obim, "unknown").text = str(objimage.imhd.unknown)
         et.SubElement(obim, "num_images").text = str(objimage.imhd.num_imnn)
         et.SubElement(obim, "num_zplanes").text = str(objimage.imhd.num_zpnn)
         # Don't bother outputting OBIM flags and "unknown" (probably parent),
@@ -527,6 +768,10 @@ class ObjectBlockContainer(object):
         
         # OBCD
         obcd = et.SubElement(root, "code")
+        et.SubElement(obcd, "x").text = str(objcode.cdhd.x)
+        et.SubElement(obcd, "y").text = str(objcode.cdhd.y)
+        et.SubElement(obcd, "width").text = str(objcode.cdhd.width)
+        et.SubElement(obcd, "height").text = str(objcode.cdhd.height)
         et.SubElement(obcd, "flags").text = str(objcode.cdhd.flags)
         et.SubElement(obcd, "parent").text = str(objcode.cdhd.parent)
         et.SubElement(obcd, "walk_x").text = str(objcode.cdhd.walk_x)
@@ -536,11 +781,19 @@ class ObjectBlockContainer(object):
         util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "OBHD.xml"))
 
+    def _save_order_to_xml(self, path):
+        root = et.Element("order")
+
+        obim_order = et.SubElement(root, "object-image")
+        et.SubElement()
+
+        obcd_order = et.SubElement(root, "object-code")
+
     
     def load_from_file(self, path):
         file_list = os.listdir(path)
         
-        re_pattern = re.compile(r"[0-9]{3}_.*")
+        re_pattern = re.compile(r"[0-9]{" + str(self.OBJ_ID_LENGTH) + r"}_.*")
         object_dirs = [f for f in file_list if re_pattern.match(f) != None]
         for od in object_dirs:
             new_path = os.path.join(path, od)
@@ -562,6 +815,8 @@ class ObjectBlockContainer(object):
     
     
 class BlockOBIMV5(BlockContainerV5):
+    name = "OBIM"
+
     def _read_data(self, resource, start, decrypt):
         end = start + self.size
         
@@ -583,8 +838,10 @@ class BlockOBIMV5(BlockContainerV5):
         # Load the header
         block = BlockIMHDV5(self.block_name_length, self.crypt_value)
         block.load_from_file(os.path.join(path, "OBHD.xml"))
+        self.append(block)
         self.obj_id = block.obj_id
         self.imhd = block
+        self.name = "OBIM"
         
         # Load the image data
         file_list = os.listdir(path)
@@ -605,8 +862,11 @@ class BlockOBIMV5(BlockContainerV5):
     
     def generate_file_name(self):
         return ""
-    
+
+
 class BlockIMHDV5(BlockDefaultV5):
+    name = "IMHD"
+
     def _read_data(self, resource, start, decrypt):
         """
         obj id       : 16le
@@ -620,7 +880,7 @@ class BlockIMHDV5(BlockDefaultV5):
         height       : 16le
         
         not sure about the following, I think it's only applicable for SCUMM V6+:
-        num hotspots : 16le (usually one for each IMnn, but their is one even
+        num hotspots : 16le (usually one for each IMnn, but there is one even
                        if no IMnn is present)
         hotspots
           x          : 16le signed
@@ -649,27 +909,36 @@ class BlockIMHDV5(BlockDefaultV5):
         
         # Shared
         self.obj_id = int(root.find("id").text)
-        self.x = int(root.find("x").text)
-        self.y = int(root.find("y").text)
-        self.width = int(root.find("width").text)
-        self.height = int(root.find("height").text)
 
         # OBIM
         obim_node = root.find("image")
+
+        self.x = int(obim_node.find("x").text)
+        self.y = int(obim_node.find("y").text)
+        self.width = int(obim_node.find("width").text)
+        self.height = int(obim_node.find("height").text)
+        self.flags = int(obim_node.find("flags").text) # possibly wrong
+        self.unknown = int(obim_node.find("unknown").text)
+
         self.num_imnn = int(obim_node.find("num_images").text)
         self.num_zpnn = int(obim_node.find("num_zplanes").text)
-        
-        # OBCD
-        obcd_node = root.find("code")
-        self.flags = int(obcd_node.find("flags").text) # possibly wrong
-        self.unknown = int(obcd_node.find("parent").text) # almost certainly wrong
+
         
     def save_to_file(self, path):
         """ Combined OBHD.xml is saved in the ObjectBlockContainer."""
-        pass
+        return
 
-    
+    def _write_data(self, outfile, encrypt):
+        data = struct.pack("<3H2B4H", self.obj_id, self.num_imnn, self.num_zpnn, self.flags, self.unknown,
+            self.x, self.y, self.width, self.height)
+        if encrypt:
+            data = util.crypt(data, self.crypt_value)
+        outfile.write(data)
+
+
 class BlockOBCDV5(BlockContainerV5):
+    name = "OBCD"
+
     def _read_data(self, resource, start, decrypt):
         end = start + self.size
         block = BlockCDHDV5(self.block_name_length, self.crypt_value)
@@ -688,6 +957,7 @@ class BlockOBCDV5(BlockContainerV5):
         self.obj_name = self.obna.obj_name # cheat
 
     def load_from_file(self, path):
+        self.name = "OBCD"
         block = BlockCDHDV5(self.block_name_length, self.crypt_value)
         block.load_from_file(os.path.join(path, "OBHD.xml"))
         self.obj_id = block.obj_id # maybe should handle header info better
@@ -705,16 +975,33 @@ class BlockOBCDV5(BlockContainerV5):
         
     def save_to_file(self, path):
         self.verb.save_to_file(path)
-        
+
+    def save_to_resource(self, resource, room_start=0):
+        start = resource.tell()
+        self._write_dummy_header(resource, True)
+        self.cdhd.save_to_resource(resource, room_start)
+        self.verb.save_to_resource(resource, room_start)
+        self.obna.save_to_resource(resource, room_start)
+        end = resource.tell()
+        self.size = end - start
+        resource.flush()
+        resource.seek(start, os.SEEK_SET)
+        self._write_header(resource, True)
+        resource.flush()
+        resource.seek(end, os.SEEK_SET)
+
     def generate_file_name(self):
         return str(self.obj_id) + "_" + self.obj_name
-    
+
+
 class BlockOBNAV5(BlockDefaultV5):
+    name = "OBNA"
+
     def _read_data(self, resource, start, decrypt):
         data = resource.read(self.size - (resource.tell() - start))
         if decrypt:
             data = util.crypt(data, self.crypt_value)
-        self.obj_name = data[:-1]
+        self.obj_name = data[:-1] # remove null-terminating character
         
     def load_from_file(self, path):
         self.name = "OBNA"
@@ -731,10 +1018,17 @@ class BlockOBNAV5(BlockDefaultV5):
             name = ''
         self.obj_name = util.unescape_invalid_chars(name)
         
-    #def save_to_resource(self, path):
-    #    write object name + "\x00"
-    
+    def _write_data(self, outfile, encrypt):
+        # write object name + "\x00"
+        data = self.obj_name + "\x00"
+        if encrypt:
+            data = util.crypt(data, self.crypt_value)
+        outfile.write(data)
+
+
 class BlockCDHDV5(BlockDefaultV5):
+    name = "CDHD"
+
     def _read_data(self, resource, start, decrypt):
         """
           obj id    : 16le
@@ -773,20 +1067,32 @@ class BlockCDHDV5(BlockDefaultV5):
         # Shared
         obj_id = int(root.find("id").text)
         self.obj_id = obj_id
-        self.x = int(root.find("x").text)
-        self.y = int(root.find("y").text)
-        self.width = int(root.find("width").text)
-        self.height = int(root.find("height").text)
         
         # OBCD
         obcd_node = root.find("code")
+        self.x = int(obcd_node.find("x").text)
+        self.y = int(obcd_node.find("y").text)
+        self.width = int(obcd_node.find("width").text)
+        self.height = int(obcd_node.find("height").text)
+
         self.flags = int(obcd_node.find("flags").text)
         self.parent = int(obcd_node.find("parent").text)
         self.walk_x = int(obcd_node.find("walk_x").text)
         self.walk_y = int(obcd_node.find("walk_y").text)
         self.actor_dir = int(obcd_node.find("actor_dir").text)
-        
+
+    def _write_data(self, outfile, encrypt):
+        """ Assumes it's writing to a resource."""
+        data = struct.pack("<H6B2hB", self.obj_id, self.x, self.y, self.width, self.height, self.flags,
+            self.parent, self.walk_x, self.walk_y, self.actor_dir)
+        if encrypt:
+            data = util.crypt(data, self.crypt_value)
+        outfile.write(data)
+
+
 class BlockRMHDV5(BlockDefaultV5):
+    name = "RMHD"
+
     def _read_data(self, resource, start, decrypt):
         """
         width 16le
@@ -827,9 +1133,20 @@ class BlockRMHDV5(BlockDefaultV5):
         util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "RMHD.xml"))
 
+    def _write_data(self, outfile, encrypt):
+        """ Assumes it's writing to a resource."""
+        data = struct.pack("<3H", self.width, self.height, self.num_objects)
+        if encrypt:
+            data = util.crypt(data, self.crypt_value)
+        outfile.write(data)
+
+
 class BlockRMIHV5(BlockDefaultV5):
+    name = "RMIH"
+
     def _read_data(self, resource, start, decrypt):
         """
+        Assumes it's reading from a resource.
         num_zbuffers 16le
         """
         data = resource.read(2)
@@ -842,10 +1159,9 @@ class BlockRMIHV5(BlockDefaultV5):
         self.num_zbuffers = values[0]
         del values
     
-    
     def load_from_file(self, path):
         self.name = "RMIH"
-        self.size = 1 + 8
+        self.size = 2 + 8
         self._load_header_from_xml(path)
 
     def _load_header_from_xml(self, path):
@@ -862,12 +1178,23 @@ class BlockRMIHV5(BlockDefaultV5):
         
         util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "RMIH.xml"))
-        
+
+    def _write_data(self, outfile, encrypt):
+        """ Assumes it's writing to a resource."""
+        data = struct.pack("<H", self.num_zbuffers)
+        if encrypt:
+            data = util.crypt(data, self.crypt_value)
+        outfile.write(data)
+
         
 class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
     """ SOUN blocks in V5 may contain CD track data. Unfortunately, these CD
     blocks have no nice header value to look for. Instead, we have to check
     the file size somehow."""
+
+    # Potential task: do some crazy class mutation if this is a CD track.
+
+    name = "SOUN"
     
     def __init__(self, *args, **kwds):
         super(BlockSOUNV5, self).__init__(*args, **kwds)
@@ -899,14 +1226,21 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
         else:
             newpath = self._create_directory(path)
             self._save_children(newpath)
-                
+
+    def save_to_resource(self, resource, room_start=0):
+        if self.is_cd_track:
+            self._write_header(resource, True)
+            self._write_raw_data(resource, True)
+        else:
+            super(BlockSOUNV5, self).save_to_resource(resource, room_start)
+
     def load_from_file(self, path):
         #global file_dispatcher
         name = os.path.split(path)[1]
         if os.path.splitext(name)[1] == '':
             self.is_cd_track = False
             self.name = name.split('_')[0]
-            self.index = name.split('_')[1]
+            self.index = int(name.split('_')[1])
             self.children = []
             
             file_list = os.listdir(path)
@@ -916,7 +1250,7 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
                 b = file_dispatcher.dispatch_next_block(f)
                 if b != None:
                     b.load_from_file(os.path.join(path, f))
-                    self.children.append(b)
+                    self.append(b)
         else:
             self.is_cd_track = True
             self.name = name.split('_')[0]
@@ -925,8 +1259,7 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
             soun_file = file(path, 'rb')
             self._read_header(soun_file, False)
             self._read_data(soun_file, 0, False)
-            soun_file.close()
-            
+            soun_file.close()            
 
     def generate_file_name(self):
         name = (self.name 
@@ -940,6 +1273,8 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
      
         
 class BlockLFLFV5(BlockContainerV5, BlockGloballyIndexedV5):
+    name = "LFLF"
+
     def load_from_resource(self, resource, room_start=0):
         location = resource.tell()
         #super(BlockGloballyIndexedV5, self).load_from_resource(resource, location)
@@ -956,7 +1291,13 @@ class BlockLFLFV5(BlockContainerV5, BlockGloballyIndexedV5):
                        + "It can not be re-packed or used in the game without manually assigning an index.")
             self.is_unknown = True
             self.index = control.unknown_blocks_counter.get_next_index(self.name)    
-    
+
+    def save_to_resource(self, resource, room_start=0):
+        location = resource.tell()
+        room_start = location
+        control.global_index_map.map_index(self.name, location, self.index)
+        super(BlockLFLFV5, self).save_to_resource(resource, room_start)
+
     def save_to_file(self, path):
         util.information("Saving block " 
                          + self.name 
@@ -969,7 +1310,7 @@ class BlockLFLFV5(BlockContainerV5, BlockGloballyIndexedV5):
         #global file_dispatcher
         name = os.path.split(path)[1]
         self.name = name.split('_')[0]
-        self.index = name.split('_')[1]
+        self.index = int(name.split('_')[1])
         self.children = []
         
         file_list = os.listdir(path)
@@ -979,7 +1320,7 @@ class BlockLFLFV5(BlockContainerV5, BlockGloballyIndexedV5):
             b = file_dispatcher.dispatch_next_block(f)
             if b != None:
                 b.load_from_file(os.path.join(path, f))
-                self.children.append(b)
+                self.append(b)
 
     
     def generate_file_name(self):
@@ -1001,6 +1342,40 @@ class BlockLFLFV5(BlockContainerV5, BlockGloballyIndexedV5):
     
     
 class BlockLECFV5(BlockContainerV5):
+    name = "LECF"
+
+    def save_to_resource(self, resource, room_start=0):
+        start = resource.tell()
+
+        # write dummy header
+        self._write_dummy_header(resource, True)
+
+        # write dummy LOFF
+        loff_start = resource.tell()
+        loff_block = BlockLOFFV5(self.block_name_length, self.crypt_value)
+        #loff_block.name = "LOFF" # CRAAAP
+        num_rooms = len(self.children)
+        loff_block.write_dummy_block(resource, num_rooms)
+
+        # process children
+        for c in self.children:
+            #if hasattr(c, 'index'):
+            #    util.debug("object " + str(c) + " has index " + str(c.index))
+            #util.debug("location: " + str(resource.tell()))
+            c.save_to_resource(resource, room_start)
+
+        # go back and write size of LECF block (i.e. the whole ".001" file)
+        self.size = resource.tell() - start
+        resource.flush()
+        end = resource.tell()
+        resource.seek(start, os.SEEK_SET)
+        self._write_header(resource, True)
+
+        # go back and write the LOFF block
+        loff_block.save_to_resource(resource, room_start)
+        resource.seek(end, os.SEEK_SET)
+
+
     def __repr__(self):
         childstr = [str(c) for c in self.children]
         return "[" + self.name + ", " + ", \n".join(childstr) + "]" 
@@ -1034,14 +1409,16 @@ class AbstractBlockDispatcher(object):
         return None
 
 class AbstractFileDispatcher(AbstractBlockDispatcher):
+    IGNORED_BLOCKS = frozenset([])
+    
     def dispatch_next_block(self, block_name):
-        print "dispatching next file: " + block_name
         if block_name in self.BLOCK_MAP:
             block_type = self.BLOCK_MAP[block_name]            
         else:
             block_type = self._dispatch_regex_block(block_name)
             if block_type is None:
-                print("Ignoring unkown file: " + str(block_name))
+                if not block_name in self.IGNORED_BLOCKS:
+                    util.information("Ignoring unknown file: " + str(block_name))
                 return None
         block = block_type(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
         return block
@@ -1112,6 +1489,7 @@ class FileDispatcherV5(AbstractFileDispatcher):
         # ---objects (incl. subdirs)
         r"VERB.dmp" : BlockDefaultV5,
         r"SMAP.dmp" : BlockDefaultV5, # also RMIM
+        r"BOMP.dmp" : BlockDefaultV5, # room 99, object 1045 in MI1 CD.
         # ---scripts
         r"ENCD.dmp" : BlockDefaultV5,
         r"EXCD.dmp" : BlockDefaultV5,
@@ -1138,6 +1516,12 @@ class FileDispatcherV5(AbstractFileDispatcher):
         # --scripts
         (re.compile(r"LSCR_[0-9]{3}\.dmp"), BlockLSCRV5)
     ]
+    IGNORED_BLOCKS = frozenset([
+        r"ROL.mhd",
+        r"SPK.mhd",
+        r"ADL.mhd",
+        r"SBL.mhd"
+    ])
     DEFAULT_BLOCK = BlockDefaultV5
 
 class IndexFileDispatcherV5(AbstractFileDispatcher):
@@ -1250,18 +1634,70 @@ class BlockIndexDirectoryV5(BlockDefaultV5):
             control.global_index_map.map_index(self.DIR_TYPES[self.name], key, i)
             
     def save_to_file(self, path):
+        """This block is generated when saving to a resource."""
+        return
+
+    def save_to_resource(self, resource, room_start=0):
+        # is room_start required? nah, just there for interface compliance.
+        #for i, key in enumerate()
         pass
             
 class BlockDOBJV5(BlockDefaultV5):
-    pass
+    def _read_data(self, resource, start, decrypt):
+        num_items = util.str_to_int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
+        self.objects = []
+        i = num_items
+        while i > 0:
+            owner_and_state = util.str_to_int(resource.read(1), crypt_val=(self.crypt_value if decrypt else None))
+            owner = (owner_and_state & 0xF0) >> 4
+            state = owner_and_state & 0x0F
+            self.objects.append((owner, state))
+            i -= 1
+            
+    def load_from_file(self, path):
+        tree = et.parse(path)
+        
+        self.objects = []
+        for obj_node in tree.getiterator("object-entry"):
+            obj_id = int(obj_node.find("id").text)
+            assert obj_id == len(self.objects), "Entries in object ID must be in sorted order with no gaps in ID numbering."
+            owner = int(obj_node.find("owner").text)
+            state = int(obj_node.find("state").text)
+            self.objects.append((owner, state))
+
+    def save_to_file(self, path):
+        root = et.Element("object-directory")
+
+        for i in xrange(len(self.objects)):
+            owner, state = self.objects[i]
+            obj_node = et.SubElement(root, "object-entry")
+            et.SubElement(obj_node, "id").text = str(i)
+            et.SubElement(obj_node, "owner").text = str(owner)
+            et.SubElement(obj_node, "state").text = str(state)
+
+        util.indent_elementtree(root)
+        et.ElementTree(root).write(os.path.join(path, "dobj.xml"))
+
+    def save_to_resource(self, resource, room_start=0):
+        pass
+
+class BlockDROOV5(BlockDefaultV5):
+    """Directory of offsets to ROOM blocks."""
+    def save_to_file(self, path):
+        """This block is generated when saving to a resource."""
+        return
+
+    def save_to_resource(self, resource, room_start=0):
+        pass
 
 class IndexBlockContainerV5(AbstractBlockDispatcher):
+    """Resource.000 processor; just maps blocks to Python objects (POPOs?)."""
     CRYPT_VALUE = 0x69
     BLOCK_NAME_LENGTH = 4
     BLOCK_MAP = {
         "RNAM" : BlockRNAMV5,
         "MAXS" : BlockMAXSV5,
-        "DROO" : BlockDefaultV5,
+        "DROO" : BlockDROOV5,
         "DSCR" : BlockIndexDirectoryV5,
         "DSOU" : BlockIndexDirectoryV5,
         "DCOS" : BlockIndexDirectoryV5,
@@ -1286,7 +1722,8 @@ class IndexBlockContainerV5(AbstractBlockDispatcher):
 def __test_unpack():
     global block_dispatcher
     
-    outpath = os.getcwd()
+    #outpath = os.getcwd()
+    outpath = "D:\\TEMP"
     
     dirfile = file("MONKEY.000", "rb")
     dir_block = IndexBlockContainerV5()
@@ -1304,22 +1741,49 @@ def __test_unpack():
     
     block.save_to_file(outpath)
 
+def __test_unpack_from_file():
+    global file_dispatcher
+
+    #outpath = os.getcwd()
+    outpath = "D:\\TEMP"
+
+    inpath = os.path.join(outpath, "LECF")
+    block = BlockLECFV5(4, 0x69)
+    block.load_from_file(inpath)
+
+    #print block
+    util.information("read from file, now saving to file")
+
+    outpath = os.path.join(outpath, "outtest")
+    if not os.path.isdir(outpath):
+        os.mkdir(outpath)
+    block.save_to_file(outpath)
+
 def __test_pack():
     global file_dispatcher
+
+    #outpath = os.getcwd()
+    outpath = "D:\\TEMP"
     
-    inpath = os.path.join(os.getcwd(), "LECF")
+    inpath = os.path.join(outpath, "LECF")
     block = BlockLECFV5(4, 0x69)
     block.load_from_file(inpath)
     
-    print block
+    #print block
+    util.information("read from file, now saving to resource")
     
-    outpath = os.path.join(os.getcwd(), "outtest")
+    #outpath = os.path.join(outpath, "outtest")
     #os.mkdir(outpath)
     
-    block.save_to_file(outpath)
+    #block.save_to_file(outpath)
+
+    outpath = os.path.join(outpath, "outres.001")
+    with file(outpath, 'wb') as outres:
+        block.save_to_resource(outres)
 
 def __test():
-    __test_unpack()
-    #__test_pack()
+    #__test_unpack()
+    #__test_unpack_from_file()
+    __test_pack()
     
 if __name__ == "__main__": __test()
