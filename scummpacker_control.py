@@ -8,7 +8,7 @@ class IndexCounter(object):
 
     def reset_counts(self):
         for k in self.index_map:
-            self.index_map[K] = 0
+            self.index_map[k] = 0
     
 ##    def increment_index(self, index_name):
 ##        if not index_name in self.index_map:
@@ -78,6 +78,14 @@ class IndexMappingContainer(object):
                                             + str(key)
                                             + "\".")
         return self.index_map[map_name][key]
+
+    def items(self, map_name):
+        """Returns key/value pairs for the desired block table."""
+        if not map_name in self.index_map:
+            raise util.ScummPackerException("Unrecognised block \""
+                                            + str(map_name)
+                                            + "\" tried to retrieve a global index.")
+        return self.index_map[map_name].items()
     
 global_index_map = None
 global_index_map = IndexMappingContainer(
