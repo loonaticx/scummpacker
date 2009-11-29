@@ -745,20 +745,19 @@ class ObjectBlockContainer(object):
         self.block_name_length = block_name_length
         self.crypt_value = crypt_value
         self.name = "objects"
-        self.obim_order = [] # hacks to preserve order of object blocks
-        self.obcd_order = []
+        self.order_map = { "OBCD" : [], "OBIM" : [] }
     
     def add_code_block(self, block):
         if not block.obj_id in self.objects:
             self.objects[block.obj_id] = [None, None] # pos1 = image, pos2 = code
         self.objects[block.obj_id][1] = block
-        self.obcd_order.append(block.obj_id) # maybe should enforce obj_id being an int?
+        self.order_map["OBCD"].append(block.obj_id)
 
     def add_image_block(self, block):
         if not block.obj_id in self.objects:
             self.objects[block.obj_id] = [None, None] # pos1 = image, pos2 = code
         self.objects[block.obj_id][0] = block
-        self.obim_order.append(block.obj_id)
+        self.order_map["OBIM"].append(block.obj_id)
         
     def save_to_file(self, path):
         objects_path = os.path.join(path, self.generate_file_name())
@@ -773,35 +772,17 @@ class ObjectBlockContainer(object):
             self._save_header_to_xml(newpath, objimage, objcode)
         self._save_order_to_xml(objects_path)
 
-    def save_to_resource_old(self, resource, room_start=0):
-        object_entries = self.objects.items()
-        # NOTE: although we sort by object ID, original resources don't seem
-        # to be fussy. See: MI1 CD, room 2, object 36 - the sequence for
-        # images is object 31, 32, 33... but the sequence for codes
-        # is object 31, 36, 32...!
-        #util.ordered_sort(object_entries, self.obim_order)
-        object_entries.sort() # sort by object id
-        # TODO: keep track of where objects are written in the resource
-        # Write all image blocks first
-        for obj_id, (objimage, objcode) in object_entries:
-            #util.debug("Writing object image: " + str(obj_id))
-            objimage.save_to_resource(resource, room_start)
-        # Then write all object code/names
-        for obj_id, (objimage, objcode) in object_entries:
-            #util.debug("Writing object code: " + str(objcode.obj_id))
-            objcode.save_to_resource(resource, room_start)
-
     def save_to_resource(self, resource, room_start=0):
         # TODO: keep track of where objects are written in the resource
         object_keys = self.objects.keys()
         # Write all image blocks first
-        object_keys = util.ordered_sort(object_keys, self.obim_order)
+        object_keys = util.ordered_sort(object_keys, self.order_map["OBIM"])
         for obj_id in object_keys:
             #util.debug("Writing object image: " + str(obj_id))
             self.objects[obj_id][0].save_to_resource(resource, room_start)
 
         # Then write all object code/names
-        object_keys = util.ordered_sort(object_keys, self.obcd_order)
+        object_keys = util.ordered_sort(object_keys, self.order_map["OBCD"])
         for obj_id in object_keys:
             #util.debug("Writing object code: " + str(objcode.obj_id))
             self.objects[obj_id][1].save_to_resource(resource, room_start)
@@ -843,13 +824,11 @@ class ObjectBlockContainer(object):
     def _save_order_to_xml(self, path):
         root = et.Element("order")
 
-        obim_order = et.SubElement(root, "object-image")
-        for o in self.obim_order:
-            et.SubElement(obim_order, "order-entry").text = str(o)
-
-        obcd_order = et.SubElement(root, "object-code")
-        for o in self.obcd_order:
-            et.SubElement(obcd_order, "order-entry").text = str(o)
+        for block_type, order_list in self.order_map.items():
+            order_list_node = et.SubElement(root, "order-list")
+            order_list_node.set("block-type", block_type)
+            for o in order_list:
+                et.SubElement(order_list_node, "order-entry").text = str(o)
 
         util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "order.xml"))
@@ -859,8 +838,7 @@ class ObjectBlockContainer(object):
         
         re_pattern = re.compile(r"[0-9]{" + str(self.OBJ_ID_LENGTH) + r"}_.*")
         object_dirs = [f for f in file_list if re_pattern.match(f) != None]
-        self.obim_order = []
-        self.obcd_order = []
+        self.order_map = { "OBCD" : [], "OBIM" : [] }
         for od in object_dirs:
             new_path = os.path.join(path, od)
             
@@ -883,15 +861,21 @@ class ObjectBlockContainer(object):
         tree = et.parse(order_fname)
         root = tree.getroot()
 
-        obim_order = root.find("object-image")
-        self.obim_order = []
-        for o in obim_order.findall("order-entry"):
-            self.obim_order.append(int(o.text))
-            
-        obcd_order = root.find("object-code")
-        self.obcd_order = []
-        for o in obcd_order.findall("order-entry"):
-            self.obcd_order.append(int(o.text))
+        loaded_order_map = self.order_map 
+        self.order_map = { "OBCD" : [], "OBIM" : [] }
+
+        for order_list in root.findall("order-list"):
+            block_type = order_list.get("block-type")
+
+            for o in order_list.findall("order-entry"):
+                if not block_type in self.order_map:
+                    self.order_map[block_type] = []
+                self.order_map[block_type].append(int(o.text))
+
+            # Retain order of items loaded but not present in order.xml
+            if block_type in loaded_order_map:
+                extra_orders = [i for i in loaded_order_map[block_type] if not i in self.order_map[block_type]]
+                self.order_map[block_type].extend(extra_orders)
             
     def generate_file_name(self):
         return "objects"
@@ -1870,7 +1854,7 @@ def __test_pack():
         block.save_to_resource(outres)
 
 def __test():
-    #__test_unpack()
+    __test_unpack()
     #__test_unpack_from_file()
     __test_pack()
     
