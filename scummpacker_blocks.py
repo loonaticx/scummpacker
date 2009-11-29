@@ -272,6 +272,7 @@ class BlockContainerV5(BlockDefaultV5):
     def __init__(self, *args, **kwds):
         super(BlockContainerV5, self).__init__(*args, **kwds)
         self.children = []
+        self.order_map = {}
     
     def _read_data(self, resource, start, decrypt):
         global block_dispatcher
@@ -284,6 +285,7 @@ class BlockContainerV5(BlockDefaultV5):
     def append(self, block):
         # Maintain sorted order for children
         #TODO: use bisect module for sorted insertion?
+        # @type order_list list
         global block_order_res_v5
         rank_lookup_name = block.name
         # dumb crap here but I'm sick of working on this crappy piece of software
@@ -297,7 +299,22 @@ class BlockContainerV5(BlockDefaultV5):
                 c_rank_lookup_name = c_rank_lookup_name[:2]
             #util.debug("Comparing block: " + str(c_rank_lookup_name))
             c_rank = block_order_res_v5.index(c_rank_lookup_name)
-            if c_rank > block_rank:
+            # Same block type, so look for a specified order for this block type.
+            if c_rank == block_rank:
+                if not rank_lookup_name in self.order_map:
+                    continue # no order specified, continue iteration, appending after all existing blocks of this type
+                order_list = self.order_map[rank_lookup_name]
+                if not block.index in order_list:
+                    continue # if the order of the added block is not known, append after existing blocks
+                if not c.index in order_list:
+                    self.children.insert(i, block)
+                    return # if existing block has no order but new block done, insert new block before unordered block.
+                block_order = order_list.index(block.index)
+                c_order = order_list.index(c.index)
+                if c_order > block_order:
+                    self.children.insert(i, block)
+                    return # existing block comes after block being added
+            elif c_rank > block_rank:
                 #util.debug("rank_lookup_name: " + str(rank_lookup_name) + ", c_rank: " + str(c_rank) + ", block_rank: " + str(block_rank))
                 self.children.insert(i, block)
                 return
@@ -307,6 +324,7 @@ class BlockContainerV5(BlockDefaultV5):
     def save_to_file(self, path):
         newpath = self._create_directory(path)
         self._save_children(newpath)
+        self._save_order_to_xml(newpath)
         
     def _create_directory(self, start_path):
         newpath = os.path.join(start_path, self.generate_file_name())
@@ -317,13 +335,41 @@ class BlockContainerV5(BlockDefaultV5):
     def _save_children(self, path):
         for child in self.children:
             child.save_to_file(path)
-        
+
+    def _save_order_to_xml(self, path):
+        root = et.Element("order")
+
+        curr_type = None
+        ol_node = None
+        for c in self.children:
+            if not hasattr(c, "index"):
+                continue
+            block_type = c.name
+            # Another dumb hack
+            if block_type[:2] == "ZP" or block_type[:2] == "IM":
+                block_type = block_type[:2]
+            # if block type is new, create new list
+            if block_type != curr_type:
+                ol_node = et.SubElement(root, "order-list")
+                ol_node.set("block-type", block_type)
+                curr_type = block_type
+            et.SubElement(ol_node, "order-entry").text = str(c.index)
+
+        if len(root.getchildren()) == 0:
+            return
+
+        util.indent_elementtree(root)
+        et.ElementTree(root).write(os.path.join(path, "order.xml"))
+
     def load_from_file(self, path):
-        #global file_dispatcher #TODO?
         self.name = os.path.split(path)[1]
         self.children = []
+        self.order_map = {}
         
         file_list = os.listdir(path)
+        if "order.xml" in file_list:
+            file_list.remove("order.xml")
+            self._load_order_from_xml(os.path.join(path, "order.xml"))
         
         file_dispatcher = FileDispatcherV5()
         for f in file_list:
@@ -331,6 +377,27 @@ class BlockContainerV5(BlockDefaultV5):
             if b != None:
                 b.load_from_file(os.path.join(path, f))
                 self.append(b)
+
+    def _load_order_from_xml(self, path):
+        if not os.path.isfile(path):
+            # If order.xml does not exist, use whatever order we want.
+            # Should not get here...
+            return
+
+        tree = et.parse(path)
+        root = tree.getroot()
+
+        order_map = {}
+
+        for ol in root.findall("order-list"):
+            block_type = ol.get("block-type")
+            order_list = []
+            for o in ol.findall("order-entry"):
+                order_list.append(int(o.text))
+            order_map[block_type] = order_list
+
+        #util.debug(str(order_map))
+        self.order_map = order_map
 
     def save_to_resource(self, resource, room_start=0):
         start = resource.tell()
@@ -349,14 +416,6 @@ class BlockContainerV5(BlockDefaultV5):
         self._write_header(resource, True)
         resource.seek(end, os.SEEK_SET)
 
-    def sort_children(self):
-        """Ensures that children are stored & processed in the correct order."""
-        global block_order_res_v5
-        cmp_method = lambda x,y: cmp(block_order_res_v5.index(x.name),
-                                     block_order_res_v5.index(y.name))
-        self.children.sort(cmp=cmp_method)
-        return
-
     def generate_file_name(self):
         return self.name
     
@@ -372,11 +431,13 @@ class BlockMIDISoundV5(BlockSoundV5):
     
     def load_from_file(self, path):
         self.name = os.path.splitext(os.path.split(path)[1])[0]
-        try:
-            mdhd_file = file(os.path.splitext(path)[0] + ".mdhd", 'rb')
+        mdhd_fname = os.path.splitext(path)[0] + ".mdhd"
+        if os.path.isfile(mdhd_fname):
+            util.debug("Loading mdhd from file: " + mdhd_fname)
+            mdhd_file = file(mdhd_fname, 'rb')
             mdhd_data = self._read_raw_data(mdhd_file, self.MDHD_SIZE, False)
             mdhd_file.close()
-        except Exception, e:
+        else:
             mdhd_data = self._generate_mdhd_header()
         self.mdhd_header = mdhd_data
         self.size = os.path.getsize(path) # size does not include ADL/ROL block header
@@ -388,8 +449,8 @@ class BlockMIDISoundV5(BlockSoundV5):
         # Possibly the only MDhd block that is different:
         # MI1CD\LECF\LFLF_011\SOUN_043\SOU
         # 4D44 6864 0000 0008 0000 FF7F 0000 0080
-        if self.mdhd_header != self.MDHD_DEFAULT_DATA:
-            outfile = file(os.path.join(path, self.generate_file_name() + ".mhd"), 'wb')
+        if self.mdhd_header.tostring() != self.MDHD_DEFAULT_DATA: 
+            outfile = file(os.path.join(path, self.generate_file_name() + ".mdhd"), 'wb')
             self._write_mdhd_header(outfile, False)
             outfile.close()
         outfile = file(os.path.join(path, self.generate_file_name() + ".mid"), 'wb')
@@ -684,18 +745,20 @@ class ObjectBlockContainer(object):
         self.block_name_length = block_name_length
         self.crypt_value = crypt_value
         self.name = "objects"
-        self.obim_order = None # hacks to preserve order of object blocks
-        self.obcd_order = None
+        self.obim_order = [] # hacks to preserve order of object blocks
+        self.obcd_order = []
     
     def add_code_block(self, block):
         if not block.obj_id in self.objects:
             self.objects[block.obj_id] = [None, None] # pos1 = image, pos2 = code
         self.objects[block.obj_id][1] = block
+        self.obcd_order.append(block.obj_id) # maybe should enforce obj_id being an int?
 
     def add_image_block(self, block):
         if not block.obj_id in self.objects:
             self.objects[block.obj_id] = [None, None] # pos1 = image, pos2 = code
         self.objects[block.obj_id][0] = block
+        self.obim_order.append(block.obj_id)
         
     def save_to_file(self, path):
         objects_path = os.path.join(path, self.generate_file_name())
@@ -708,6 +771,7 @@ class ObjectBlockContainer(object):
             objimage.save_to_file(newpath)
             objcode.save_to_file(newpath)
             self._save_header_to_xml(newpath, objimage, objcode)
+        self._save_order_to_xml(objects_path)
 
     def save_to_resource_old(self, resource, room_start=0):
         object_entries = self.objects.items()
@@ -730,15 +794,14 @@ class ObjectBlockContainer(object):
     def save_to_resource(self, resource, room_start=0):
         # TODO: keep track of where objects are written in the resource
         object_keys = self.objects.keys()
-        
         # Write all image blocks first
-        util.ordered_sort(object_keys, self.obim_order)
+        object_keys = util.ordered_sort(object_keys, self.obim_order)
         for obj_id in object_keys:
             #util.debug("Writing object image: " + str(obj_id))
             self.objects[obj_id][0].save_to_resource(resource, room_start)
 
         # Then write all object code/names
-        util.ordered_sort(object_keys, self.obcd_order)
+        object_keys = util.ordered_sort(object_keys, self.obcd_order)
         for obj_id in object_keys:
             #util.debug("Writing object code: " + str(objcode.obj_id))
             self.objects[obj_id][1].save_to_resource(resource, room_start)
@@ -761,10 +824,6 @@ class ObjectBlockContainer(object):
         et.SubElement(obim, "unknown").text = str(objimage.imhd.unknown)
         et.SubElement(obim, "num_images").text = str(objimage.imhd.num_imnn)
         et.SubElement(obim, "num_zplanes").text = str(objimage.imhd.num_zpnn)
-        # Don't bother outputting OBIM flags and "unknown" (probably parent),
-        #  they are always 0.
-        #et.SubElement(obim, "flags").text = str(objimage.imhd.flags)
-        #et.SubElement(obim, "unknown").text = str(objimage.imhd.unknown)
         
         # OBCD
         obcd = et.SubElement(root, "code")
@@ -785,16 +844,23 @@ class ObjectBlockContainer(object):
         root = et.Element("order")
 
         obim_order = et.SubElement(root, "object-image")
-        et.SubElement()
+        for o in self.obim_order:
+            et.SubElement(obim_order, "order-entry").text = str(o)
 
         obcd_order = et.SubElement(root, "object-code")
+        for o in self.obcd_order:
+            et.SubElement(obcd_order, "order-entry").text = str(o)
 
+        util.indent_elementtree(root)
+        et.ElementTree(root).write(os.path.join(path, "order.xml"))
     
     def load_from_file(self, path):
         file_list = os.listdir(path)
         
         re_pattern = re.compile(r"[0-9]{" + str(self.OBJ_ID_LENGTH) + r"}_.*")
         object_dirs = [f for f in file_list if re_pattern.match(f) != None]
+        self.obim_order = []
+        self.obcd_order = []
         for od in object_dirs:
             new_path = os.path.join(path, od)
             
@@ -805,6 +871,27 @@ class ObjectBlockContainer(object):
             objcode = BlockOBCDV5(self.block_name_length, self.crypt_value)
             objcode.load_from_file(new_path)
             self.add_code_block(objcode)
+
+        self._load_order_from_xml(path)
+
+    def _load_order_from_xml(self, path):
+        order_fname = os.path.join(path, "order.xml")
+        if not os.path.isfile(order_fname):
+            # If order.xml does not exist, use whatever order we want.
+            return
+
+        tree = et.parse(order_fname)
+        root = tree.getroot()
+
+        obim_order = root.find("object-image")
+        self.obim_order = []
+        for o in obim_order.findall("order-entry"):
+            self.obim_order.append(int(o.text))
+            
+        obcd_order = root.find("object-code")
+        self.obcd_order = []
+        for o in obcd_order.findall("order-entry"):
+            self.obcd_order.append(int(o.text))
             
     def generate_file_name(self):
         return "objects"
@@ -1060,7 +1147,6 @@ class BlockCDHDV5(BlockDefaultV5):
         self._load_header_from_xml(path)
         
     def _load_header_from_xml(self, path):
-        #tree = et.parse(os.path.join(path, "header.xml"))
         tree = et.parse(path)
         root = tree.getroot()
         
@@ -1254,7 +1340,7 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
         else:
             self.is_cd_track = True
             self.name = name.split('_')[0]
-            self.index = os.path.splitext(name.split('_')[1])[0]
+            self.index = int(os.path.splitext(name.split('_')[1])[0])
             self.children = []
             soun_file = file(path, 'rb')
             self._read_header(soun_file, False)
@@ -1277,7 +1363,6 @@ class BlockLFLFV5(BlockContainerV5, BlockGloballyIndexedV5):
 
     def load_from_resource(self, resource, room_start=0):
         location = resource.tell()
-        #super(BlockGloballyIndexedV5, self).load_from_resource(resource, location)
         self._read_header(resource, True)
         self._read_data(resource, location, True)
         try:
@@ -1307,13 +1392,15 @@ class BlockLFLFV5(BlockContainerV5, BlockGloballyIndexedV5):
         super(BlockLFLFV5, self).save_to_file(path)
     
     def load_from_file(self, path):
-        #global file_dispatcher
         name = os.path.split(path)[1]
         self.name = name.split('_')[0]
         self.index = int(name.split('_')[1])
         self.children = []
         
         file_list = os.listdir(path)
+        if "order.xml" in file_list:
+            file_list.remove("order.xml")
+            self._load_order_from_xml(os.path.join(path, "order.xml"))
         
         file_dispatcher = FileDispatcherV5()
         for f in file_list:
@@ -1517,10 +1604,11 @@ class FileDispatcherV5(AbstractFileDispatcher):
         (re.compile(r"LSCR_[0-9]{3}\.dmp"), BlockLSCRV5)
     ]
     IGNORED_BLOCKS = frozenset([
-        r"ROL.mhd",
-        r"SPK.mhd",
-        r"ADL.mhd",
-        r"SBL.mhd"
+        r"ROL.mdhd",
+        r"SPK.mdhd",
+        r"ADL.mdhd",
+        r"SBL.mdhd",
+        r"order.xml"
     ])
     DEFAULT_BLOCK = BlockDefaultV5
 

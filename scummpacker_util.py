@@ -73,7 +73,30 @@ def escape_invalid_chars(in_str):
     return ''.join([(c if c in __valid_text_chars else ('\\x' + hex(ord(c)).lstrip("0x").rstrip("L").zfill(2))) for c in in_str])
 
 def unescape_invalid_chars(in_str):
-    return in_str
+    out_string = ""
+    # Is there a more Pythonic way to do this?
+    i = 0
+    while i < len(in_str):
+        c = in_str[i]
+        if c == '\\':
+            # Valid escape codes are:
+            # "\xFF" for hex values
+            # "\\" for backslashes
+            # "\"" for quote marks
+            # We treat any unknown escape codes as if the backslash did not exist.
+            i += 1
+            c = in_str[i]
+            if c == 'x':
+                # 'x' represents hex values, such as "\xFF"
+                i += 1
+                c2 = in_str[i]
+                i += 1
+                c3 = in_str[i]
+                esc_val = int(c2 + c3, 16)
+                c = chr(esc_val)
+        out_string += c
+        i+= 1
+    return out_string
 
 def indent_elementtree(elem, level=0):
     """ This function taken from http://effbot.org/zone/element-lib.htm#prettyprint.
@@ -110,7 +133,10 @@ class ScummPackerException(Exception):
 class ScummPackerUnrecognisedIndexException(ScummPackerException):
     pass
 
-m = [101, 102, 103, 104, 107, 106, 105]
-o = [105, 104, 101, 102, 103]
 
-print ordered_sort(m, o)
+def __test():
+    m = [101, 102, 103, 104, 107, 106, 105] # values
+    o = [105, 104, 101, 102, 103] # sorted order
+    assert ordered_sort(m, o) == [105, 104, 101, 102, 103, 107, 106]
+
+if __name__ == '__main__': __test()
