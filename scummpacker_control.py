@@ -10,21 +10,6 @@ class IndexCounter(object):
         for k in self.index_map:
             self.index_map[k] = 0
     
-##    def increment_index(self, index_name):
-##        if not index_name in self.index_map:
-##            raise util.ScummPackerException("Unrecognised block \"" 
-##                                            + str(index_name) 
-##                                            + "\" tried to increment a counted index.")
-##        self.index_map[index_name] = self.index_map[index_name] + 1
-        
-##    def get_index(self, index_name):
-##        if not index_name in self.index_map:
-##            raise util.ScummPackerException("Unrecognised block \"" 
-##                                            + str(index_name) 
-##                                            + "\" tried to retrieve a counted index.")
-##        return self.index_map[index_name]
-
-    
     def get_next_index(self, index_name):
         if not index_name in self.index_map:
             raise util.ScummPackerException("Unrecognised block \"" 
@@ -32,16 +17,7 @@ class IndexCounter(object):
                                             + "\" tried to retrieve a counted index.")
         self.index_map[index_name] = self.index_map[index_name] + 1
         return self.index_map[index_name]
-        
 
-#global_index_counter = None
-#global_index_counter = IndexCounter(
-#    "ROOM",
-#    "COST",
-#    "CHAR",
-#    "SCRP",
-#    "SOUN",
-#)
 
 class IndexMappingContainer(object):
     def __init__(self, *args):
