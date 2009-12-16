@@ -1779,7 +1779,29 @@ class BlockDOBJV5(BlockDefaultV5):
         et.ElementTree(root).write(os.path.join(path, "dobj.xml"))
 
     def save_to_resource(self, resource, room_start=0):
-        pass
+        # is room_start required? nah, just there for interface compliance.
+        #for i, key in enumerate()
+        items = control.global_index_map.get_items(self.DIR_TYPES[self.name])
+        items.sort(cmp=lambda x, y: cmp(x[1], y[1])) # sort by resource number
+        # Need to pad items out, so take last entry's number as the number of items
+        num_items = items[-1][1]
+        if self.name in self.MIN_ENTRIES and num_items < self.MIN_ENTRIES[self.name]:
+            num_items = self.MIN_ENTRIES[self.name]
+        # Create map with reversed key/value pairs
+        item_map = {}
+        for i, j in items:
+            item_map[j] = i
+
+        resource.write(util.int_to_str(num_items), 2, crypt_val=self.crypt_value)
+        for i in xrange(num_items):
+            if not i in item_map:
+                # write dummy values for unused item numbers.
+                # (should not get here for objects)
+                resource.write(util.int_to_str(0), 1, crypt_val=self.crypt_value)
+            else:
+                owner, state = self.objects[i]
+                combined_val = ((owner & 0x0F) << 4) | (state & 0x0F)
+                resource.write(util.int_to_str(combined_val), 1, crypt_val=self.crypt_value)
 
 class BlockDROOV5(BlockDefaultV5):
     """Directory of offsets to ROOM blocks."""
@@ -1788,7 +1810,9 @@ class BlockDROOV5(BlockDefaultV5):
         return
 
     def save_to_resource(self, resource, room_start=0):
-        pass # TODO
+        """DROO blocks do not seem to be used in V5 games."""
+        room_num = control.global_index_map.get_index("LFLF", room_start)
+        room_offset = control.global_index_map.get_index("ROOM", room_num)
 
 class IndexBlockContainerV5(AbstractBlockDispatcher):
     """Resource.000 processor; just maps blocks to Python objects (POPOs?)."""
