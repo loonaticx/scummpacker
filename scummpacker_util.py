@@ -4,27 +4,6 @@ import copy
 
 __valid_file_chars = frozenset("-_.() %s%s" % (string.ascii_letters, string.digits)) # for filenames
 __valid_text_chars = frozenset("!@#$%s&*+\"';:,-_.() %s%s" % ("%", string.ascii_letters, string.digits)) # for XML files
-
-# 0 = always display (errors)
-# 1 = warnings, verbose
-# 2 = debug
-TEXT_OUTPUT_LEVEL = 2
-def message(text, level=2):
-    if level <= TEXT_OUTPUT_LEVEL:
-        print(text)
-        
-def error(text):
-    message(text, 0)
-    
-def information(text):
-    message(text, 1)
-    
-def debug(text):
-    message(text, 2)
-    
-    
-#def write_byte(file, byte):
-    #file.write()
     
 def crypt(in_val, crypt_val):
     if crypt_val is None:
@@ -65,6 +44,20 @@ def int_to_str(in_val, num_bytes=4, is_BE=False, crypt_val=None):
     if crypt_val != None:
         out_val = crypt(out_val, crypt_val)
     return out_val.tostring()
+
+def parse_int_from_xml(in_str):
+    if in_str.startswith("0x"):
+        return int(in_str, 16)
+    else:
+        return int(in_str)
+
+DEC = False
+HEX = True
+def output_int_to_xml(in_val, is_hex=DEC):
+    if is_hex:
+        return hex(in_val).rstrip('L')
+    else:
+        return str(in_val)
 
 def discard_invalid_chars(in_str):
     return ''.join([c for c in in_str if c in __valid_file_chars])
@@ -132,7 +125,6 @@ class ScummPackerException(Exception):
 
 class ScummPackerUnrecognisedIndexException(ScummPackerException):
     pass
-
 
 def __test():
     m = [101, 102, 103, 104, 107, 106, 105] # values

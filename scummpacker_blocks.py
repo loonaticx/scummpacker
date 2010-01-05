@@ -1,5 +1,6 @@
 from __future__ import with_statement # bleh
 import array
+import logging
 import os
 import re
 import struct
@@ -12,6 +13,7 @@ if sys.version_info[0] < 2 or (sys.version_info[0] == 2 and sys.version_info[1] 
     raise util.ScummPackerException("ScummPacker requires Python 2.5 or higher.")
 
 block_order_res_v5 = [
+    #"LECF", # don't... just don't.
     "LOFF",
     "LFLF",
     
@@ -71,9 +73,6 @@ block_order_res_v5 = [
     "COST",
     "CHAR"
 ]
-
-block_dispatcher = None
-file_dipsatcher = None
 
 class AbstractBlock(object):
     def __init__(self, block_name_length, crypt_value, *args, **kwds):
@@ -235,9 +234,9 @@ class BlockGloballyIndexedV5(BlockDefaultV5):
         # Later on, our directories will just treat global_index_map as a list of
         # tables and go through all of the values.
         location = resource.tell()
-        #util.debug("Saving globally indexed block: " + self.name)
-        #util.debug("LFLF: " + str(control.global_index_map.items("LFLF")))
-        #util.debug("ROOM: " + str(control.global_index_map.items("ROOM")))
+        #logging.debug("Saving globally indexed block: " + self.name)
+        #logging.debug("LFLF: " + str(control.global_index_map.items("LFLF")))
+        #logging.debug("ROOM: " + str(control.global_index_map.items("ROOM")))
         room_num = control.global_index_map.get_index("LFLF", room_start)
         room_offset = control.global_index_map.get_index("ROOM", room_num)
         control.global_index_map.map_index(self.name,
@@ -291,13 +290,13 @@ class BlockContainerV5(BlockDefaultV5):
         # dumb crap here but I'm sick of working on this crappy piece of software
         if rank_lookup_name[:2] == "ZP" or rank_lookup_name[:2] == "IM":
             rank_lookup_name = rank_lookup_name[:2]
-        #util.debug("Appending block: " + str(rank_lookup_name))
+        #logging.debug("Appending block: " + str(rank_lookup_name))
         block_rank = block_order_res_v5.index(rank_lookup_name)
         for i, c in enumerate(self.children):
             c_rank_lookup_name = c.name
             if c_rank_lookup_name[:2] == "ZP" or c_rank_lookup_name[:2] == "IM":
                 c_rank_lookup_name = c_rank_lookup_name[:2]
-            #util.debug("Comparing block: " + str(c_rank_lookup_name))
+            #logging.debug("Comparing block: " + str(c_rank_lookup_name))
             c_rank = block_order_res_v5.index(c_rank_lookup_name)
             # Same block type, so look for a specified order for this block type.
             if c_rank == block_rank:
@@ -315,10 +314,10 @@ class BlockContainerV5(BlockDefaultV5):
                     self.children.insert(i, block)
                     return # existing block comes after block being added
             elif c_rank > block_rank:
-                #util.debug("rank_lookup_name: " + str(rank_lookup_name) + ", c_rank: " + str(c_rank) + ", block_rank: " + str(block_rank))
+                #logging.debug("rank_lookup_name: " + str(rank_lookup_name) + ", c_rank: " + str(c_rank) + ", block_rank: " + str(block_rank))
                 self.children.insert(i, block)
                 return
-        #util.debug("appending block, rank_lookup_name: " + str(rank_lookup_name) + ", block_rank: " + str(block_rank))
+        #logging.debug("appending block, rank_lookup_name: " + str(rank_lookup_name) + ", block_rank: " + str(block_rank))
         self.children.append(block)
     
     def save_to_file(self, path):
@@ -353,7 +352,7 @@ class BlockContainerV5(BlockDefaultV5):
                 ol_node = et.SubElement(root, "order-list")
                 ol_node.set("block-type", block_type)
                 curr_type = block_type
-            et.SubElement(ol_node, "order-entry").text = str(c.index)
+            et.SubElement(ol_node, "order-entry").text = util.output_int_to_xml(c.index)
 
         if len(root.getchildren()) == 0:
             return
@@ -371,9 +370,8 @@ class BlockContainerV5(BlockDefaultV5):
             file_list.remove("order.xml")
             self._load_order_from_xml(os.path.join(path, "order.xml"))
         
-        file_dispatcher = FileDispatcherV5()
         for f in file_list:
-            b = file_dispatcher.dispatch_next_block(f)
+            b = control.file_dispatcher.dispatch_next_block(f)
             if b != None:
                 b.load_from_file(os.path.join(path, f))
                 self.append(b)
@@ -393,10 +391,10 @@ class BlockContainerV5(BlockDefaultV5):
             block_type = ol.get("block-type")
             order_list = []
             for o in ol.findall("order-entry"):
-                order_list.append(int(o.text))
+                order_list.append(util.parse_int_from_xml(o.text))
             order_map[block_type] = order_list
 
-        #util.debug(str(order_map))
+        #logging.debug(str(order_map))
         self.order_map = order_map
 
     def save_to_resource(self, resource, room_start=0):
@@ -433,7 +431,7 @@ class BlockMIDISoundV5(BlockSoundV5):
         self.name = os.path.splitext(os.path.split(path)[1])[0]
         mdhd_fname = os.path.splitext(path)[0] + ".mdhd"
         if os.path.isfile(mdhd_fname):
-            util.debug("Loading mdhd from file: " + mdhd_fname)
+            logging.debug("Loading mdhd from file: " + mdhd_fname)
             mdhd_file = file(mdhd_fname, 'rb')
             mdhd_data = self._read_raw_data(mdhd_file, self.MDHD_SIZE, False)
             mdhd_file.close()
@@ -587,7 +585,7 @@ class BlockROOMV5(BlockContainerV5): # also globally indexed
 
     def save_to_resource(self, resource, room_start=0):
         location = resource.tell()
-        #util.debug("Saving ROOM")
+        logging.debug("Saving ROOM")
         #print control.global_index_map.items("ROOM")
         room_num = control.global_index_map.get_index("LFLF", room_start)
         control.global_index_map.map_index("ROOM", room_num, location)
@@ -700,9 +698,8 @@ class ScriptBlockContainer(object):
     def load_from_file(self, path):
         file_list = os.listdir(path)
         
-        file_dispatcher = FileDispatcherV5()
         for f in file_list:
-            b = file_dispatcher.dispatch_next_block(f)
+            b = control.file_dispatcher.dispatch_next_block(f)
             if b != None: #and self.script_types: #TODO: only load recognised scripts
                 b.load_from_file(os.path.join(path, f))
                 self.append(b)
@@ -778,13 +775,13 @@ class ObjectBlockContainer(object):
         # Write all image blocks first
         object_keys = util.ordered_sort(object_keys, self.order_map["OBIM"])
         for obj_id in object_keys:
-            #util.debug("Writing object image: " + str(obj_id))
+            #logging.debug("Writing object image: " + str(obj_id))
             self.objects[obj_id][0].save_to_resource(resource, room_start)
 
         # Then write all object code/names
         object_keys = util.ordered_sort(object_keys, self.order_map["OBCD"])
         for obj_id in object_keys:
-            #util.debug("Writing object code: " + str(objcode.obj_id))
+            #logging.debug("Writing object code: " + str(objcode.obj_id))
             self.objects[obj_id][1].save_to_resource(resource, room_start)
 
     def _save_header_to_xml(self, path, objimage, objcode):
@@ -793,30 +790,30 @@ class ObjectBlockContainer(object):
     
         #shared = et.SubElement(root, "shared")
         et.SubElement(root, "name").text = util.escape_invalid_chars(objcode.obj_name)
-        et.SubElement(root, "id").text = str(objcode.obj_id)
+        et.SubElement(root, "id").text = util.output_int_to_xml(objcode.obj_id)
         
         # OBIM
         obim = et.SubElement(root, "image")
-        et.SubElement(obim, "x").text = str(objimage.imhd.x)
-        et.SubElement(obim, "y").text = str(objimage.imhd.y)
-        et.SubElement(obim, "width").text = str(objimage.imhd.width)
-        et.SubElement(obim, "height").text = str(objimage.imhd.height)
-        et.SubElement(obim, "flags").text = str(objimage.imhd.flags)
-        et.SubElement(obim, "unknown").text = str(objimage.imhd.unknown)
-        et.SubElement(obim, "num_images").text = str(objimage.imhd.num_imnn)
-        et.SubElement(obim, "num_zplanes").text = str(objimage.imhd.num_zpnn)
+        et.SubElement(obim, "x").text = util.output_int_to_xml(objimage.imhd.x)
+        et.SubElement(obim, "y").text = util.output_int_to_xml(objimage.imhd.y)
+        et.SubElement(obim, "width").text = util.output_int_to_xml(objimage.imhd.width)
+        et.SubElement(obim, "height").text = util.output_int_to_xml(objimage.imhd.height)
+        et.SubElement(obim, "flags").text = util.output_int_to_xml(objimage.imhd.flags, util.HEX)
+        et.SubElement(obim, "unknown").text = util.output_int_to_xml(objimage.imhd.unknown, util.HEX)
+        et.SubElement(obim, "num_images").text = util.output_int_to_xml(objimage.imhd.num_imnn)
+        et.SubElement(obim, "num_zplanes").text = util.output_int_to_xml(objimage.imhd.num_zpnn)
         
         # OBCD
         obcd = et.SubElement(root, "code")
-        et.SubElement(obcd, "x").text = str(objcode.cdhd.x)
-        et.SubElement(obcd, "y").text = str(objcode.cdhd.y)
-        et.SubElement(obcd, "width").text = str(objcode.cdhd.width)
-        et.SubElement(obcd, "height").text = str(objcode.cdhd.height)
-        et.SubElement(obcd, "flags").text = str(objcode.cdhd.flags)
-        et.SubElement(obcd, "parent").text = str(objcode.cdhd.parent)
-        et.SubElement(obcd, "walk_x").text = str(objcode.cdhd.walk_x)
-        et.SubElement(obcd, "walk_y").text = str(objcode.cdhd.walk_y)
-        et.SubElement(obcd, "actor_dir").text = str(objcode.cdhd.actor_dir)
+        et.SubElement(obcd, "x").text = util.output_int_to_xml(objcode.cdhd.x)
+        et.SubElement(obcd, "y").text = util.output_int_to_xml(objcode.cdhd.y)
+        et.SubElement(obcd, "width").text = util.output_int_to_xml(objcode.cdhd.width)
+        et.SubElement(obcd, "height").text = util.output_int_to_xml(objcode.cdhd.height)
+        et.SubElement(obcd, "flags").text = util.output_int_to_xml(objcode.cdhd.flags, util.HEX)
+        et.SubElement(obcd, "parent").text = util.output_int_to_xml(objcode.cdhd.parent)
+        et.SubElement(obcd, "walk_x").text = util.output_int_to_xml(objcode.cdhd.walk_x)
+        et.SubElement(obcd, "walk_y").text = util.output_int_to_xml(objcode.cdhd.walk_y)
+        et.SubElement(obcd, "actor_dir").text = util.output_int_to_xml(objcode.cdhd.actor_dir)
 
         util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "OBHD.xml"))
@@ -828,7 +825,7 @@ class ObjectBlockContainer(object):
             order_list_node = et.SubElement(root, "order-list")
             order_list_node.set("block-type", block_type)
             for o in order_list:
-                et.SubElement(order_list_node, "order-entry").text = str(o)
+                et.SubElement(order_list_node, "order-entry").text = util.output_int_to_xml(o)
 
         util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "order.xml"))
@@ -870,7 +867,7 @@ class ObjectBlockContainer(object):
             for o in order_list.findall("order-entry"):
                 if not block_type in self.order_map:
                     self.order_map[block_type] = []
-                self.order_map[block_type].append(int(o.text))
+                self.order_map[block_type].append(util.parse_int_from_xml(o.text))
 
             # Retain order of items loaded but not present in order.xml
             if block_type in loaded_order_map:
@@ -984,15 +981,15 @@ class BlockIMHDV5(BlockDefaultV5):
         # OBIM
         obim_node = root.find("image")
 
-        self.x = int(obim_node.find("x").text)
-        self.y = int(obim_node.find("y").text)
-        self.width = int(obim_node.find("width").text)
-        self.height = int(obim_node.find("height").text)
-        self.flags = int(obim_node.find("flags").text) # possibly wrong
-        self.unknown = int(obim_node.find("unknown").text)
+        self.x = util.parse_int_from_xml(obim_node.find("x").text)
+        self.y = util.parse_int_from_xml(obim_node.find("y").text)
+        self.width = util.parse_int_from_xml(obim_node.find("width").text)
+        self.height = util.parse_int_from_xml(obim_node.find("height").text)
+        self.flags = util.parse_int_from_xml(obim_node.find("flags").text) # possibly wrong
+        self.unknown = util.parse_int_from_xml(obim_node.find("unknown").text)
 
-        self.num_imnn = int(obim_node.find("num_images").text)
-        self.num_zpnn = int(obim_node.find("num_zplanes").text)
+        self.num_imnn = util.parse_int_from_xml(obim_node.find("num_images").text)
+        self.num_zpnn = util.parse_int_from_xml(obim_node.find("num_zplanes").text)
 
         
     def save_to_file(self, path):
@@ -1140,16 +1137,16 @@ class BlockCDHDV5(BlockDefaultV5):
         
         # OBCD
         obcd_node = root.find("code")
-        self.x = int(obcd_node.find("x").text)
-        self.y = int(obcd_node.find("y").text)
-        self.width = int(obcd_node.find("width").text)
-        self.height = int(obcd_node.find("height").text)
+        self.x = util.parse_int_from_xml(obcd_node.find("x").text)
+        self.y = util.parse_int_from_xml(obcd_node.find("y").text)
+        self.width = util.parse_int_from_xml(obcd_node.find("width").text)
+        self.height = util.parse_int_from_xml(obcd_node.find("height").text)
 
-        self.flags = int(obcd_node.find("flags").text)
-        self.parent = int(obcd_node.find("parent").text)
-        self.walk_x = int(obcd_node.find("walk_x").text)
-        self.walk_y = int(obcd_node.find("walk_y").text)
-        self.actor_dir = int(obcd_node.find("actor_dir").text)
+        self.flags = util.parse_int_from_xml(obcd_node.find("flags").text)
+        self.parent = util.parse_int_from_xml(obcd_node.find("parent").text)
+        self.walk_x = util.parse_int_from_xml(obcd_node.find("walk_x").text)
+        self.walk_y = util.parse_int_from_xml(obcd_node.find("walk_y").text)
+        self.actor_dir = util.parse_int_from_xml(obcd_node.find("actor_dir").text)
 
     def _write_data(self, outfile, encrypt):
         """ Assumes it's writing to a resource."""
@@ -1189,16 +1186,16 @@ class BlockRMHDV5(BlockDefaultV5):
         tree = et.parse(path)
         root = tree.getroot()
         
-        self.width = int(root.find("width").text)
-        self.height = int(root.find("height").text)
-        self.num_objects = int(root.find("num_objects").text)
+        self.width = util.parse_int_from_xml(root.find("width").text)
+        self.height = util.parse_int_from_xml(root.find("height").text)
+        self.num_objects = util.parse_int_from_xml(root.find("num_objects").text)
         
     def save_to_file(self, path):
         root = et.Element("room")
         
-        et.SubElement(root, "width").text = str(self.width)
-        et.SubElement(root, "height").text = str(self.height)
-        et.SubElement(root, "num_objects").text = str(self.num_objects)
+        et.SubElement(root, "width").text = util.output_int_to_xml(self.width)
+        et.SubElement(root, "height").text = util.output_int_to_xml(self.height)
+        et.SubElement(root, "num_objects").text = util.output_int_to_xml(self.num_objects)
         
         util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "RMHD.xml"))
@@ -1239,12 +1236,12 @@ class BlockRMIHV5(BlockDefaultV5):
         tree = et.parse(path)
         root = tree.getroot()
         
-        self.num_zbuffers = int(root.find("num_zbuffers").text)
+        self.num_zbuffers = util.parse_int_from_xml(root.find("num_zbuffers").text)
         
     def save_to_file(self, path):
         root = et.Element("room_image")
         
-        et.SubElement(root, "num_zbuffers").text = str(self.num_zbuffers)
+        et.SubElement(root, "num_zbuffers").text = util.output_int_to_xml(self.num_zbuffers)
         
         util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "RMIH.xml"))
@@ -1311,7 +1308,6 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
             super(BlockSOUNV5, self).save_to_resource(resource, room_start)
 
     def load_from_file(self, path):
-        #global file_dispatcher
         name = os.path.split(path)[1]
         if os.path.splitext(name)[1] == '':
             self.is_cd_track = False
@@ -1321,9 +1317,8 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
             
             file_list = os.listdir(path)
             
-            file_dispatcher = FileDispatcherV5()
             for f in file_list:
-                b = file_dispatcher.dispatch_next_block(f)
+                b = control.file_dispatcher.dispatch_next_block(f)
                 if b != None:
                     b.load_from_file(os.path.join(path, f))
                     self.append(b)
@@ -1391,10 +1386,9 @@ class BlockLFLFV5(BlockContainerV5, BlockGloballyIndexedV5):
         if "order.xml" in file_list:
             file_list.remove("order.xml")
             self._load_order_from_xml(os.path.join(path, "order.xml"))
-        
-        file_dispatcher = FileDispatcherV5()
+
         for f in file_list:
-            b = file_dispatcher.dispatch_next_block(f)
+            b = control.file_dispatcher.dispatch_next_block(f)
             if b != None:
                 b.load_from_file(os.path.join(path, f))
                 self.append(b)
@@ -1421,6 +1415,10 @@ class BlockLFLFV5(BlockContainerV5, BlockGloballyIndexedV5):
 class BlockLECFV5(BlockContainerV5):
     name = "LECF"
 
+    def load_from_file(self, path):
+        # assume input path is actually the directory containing the LECF dir
+        super(BlockLECFV5, self).load_from_file(os.path.join(path, "LECF"))
+
     def save_to_resource(self, resource, room_start=0):
         start = resource.tell()
 
@@ -1437,8 +1435,8 @@ class BlockLECFV5(BlockContainerV5):
         # process children
         for c in self.children:
             #if hasattr(c, 'index'):
-            #    util.debug("object " + str(c) + " has index " + str(c.index))
-            #util.debug("location: " + str(resource.tell()))
+            #    logging.debug("object " + str(c) + " has index " + str(c.index))
+            #logging.debug("location: " + str(resource.tell()))
             c.save_to_resource(resource, room_start)
 
         # go back and write size of LECF block (i.e. the whole ".001" file)
@@ -1452,168 +1450,9 @@ class BlockLECFV5(BlockContainerV5):
         loff_block.save_to_resource(resource, room_start)
         resource.seek(end, os.SEEK_SET)
 
-
     def __repr__(self):
         childstr = [str(c) for c in self.children]
         return "[" + self.name + ", " + ", \n".join(childstr) + "]" 
-
-class AbstractBlockDispatcher(object):
-    CRYPT_VALUE = None
-    BLOCK_NAME_LENGTH = None
-    BLOCK_MAP = {}
-    DEFAULT_BLOCK = None
-    REGEX_BLOCKS = []
-    
-    def dispatch_next_block(self, resource):
-        assert type(resource) is file
-        block_name = resource.read(self.BLOCK_NAME_LENGTH)
-        if not self.CRYPT_VALUE is None:
-            block_name = util.crypt(block_name, self.CRYPT_VALUE)
-        if block_name in self.BLOCK_MAP:
-            block_type = self.BLOCK_MAP[block_name]            
-        else:
-            block_type = self._dispatch_regex_block(block_name)
-            if block_type is None:
-                block_type = self.DEFAULT_BLOCK
-        block = block_type(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
-        resource.seek(-self.BLOCK_NAME_LENGTH, os.SEEK_CUR)
-        return block
-    
-    def _dispatch_regex_block(self, block_name):
-        for re_pattern, block_type in self.REGEX_BLOCKS:
-            if re_pattern.match(block_name) != None:
-                return block_type
-        return None
-
-class AbstractFileDispatcher(AbstractBlockDispatcher):
-    IGNORED_BLOCKS = frozenset([])
-    
-    def dispatch_next_block(self, block_name):
-        if block_name in self.BLOCK_MAP:
-            block_type = self.BLOCK_MAP[block_name]            
-        else:
-            block_type = self._dispatch_regex_block(block_name)
-            if block_type is None:
-                if not block_name in self.IGNORED_BLOCKS:
-                    util.information("Ignoring unknown file: " + str(block_name))
-                return None
-        block = block_type(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
-        return block
-
-class BlockDispatcherV5(AbstractBlockDispatcher):
-    
-    CRYPT_VALUE = 0x69
-    BLOCK_NAME_LENGTH = 4
-    BLOCK_MAP = {
-        # Container blocks
-        "LFLF" : BlockLFLFV5, # also indexed
-        "ROOM" : BlockROOMV5, # also indexed (kind of)
-        "RMIM" : BlockContainerV5,
-        "SOUN" : BlockSOUNV5, # also sound (kind of)
-        "OBIM" : BlockOBIMV5,
-        "OBCD" : BlockOBCDV5,
-        "LECF" : BlockLECFV5,
-        
-        # Sound blocks
-        "SOU " : BlockSOUV5,
-        "ROL " : BlockMIDISoundV5,
-        "SPK " : BlockMIDISoundV5,
-        "ADL " : BlockMIDISoundV5,
-        "SBL " : BlockSBLV5,
-        
-        # Globally indexed blocks
-        "COST" : BlockGloballyIndexedV5,
-        "CHAR" : BlockGloballyIndexedV5,
-        "SCRP" : BlockGloballyIndexedV5,
-        "SOUN" : BlockSOUNV5,
-        
-        # Other blocks that should not used default block functionality
-        "IMHD" : BlockIMHDV5,
-        "LSCR" : BlockLSCRV5,
-        "RMHD" : BlockRMHDV5,
-        "RMIH" : BlockRMIHV5,
-        "LOFF" : BlockLOFFV5
-        
-    }
-    REGEX_BLOCKS = [
-        (re.compile(r"IM[0-9]{2}"), BlockContainerV5)
-    ]
-    DEFAULT_BLOCK = BlockDefaultV5
-
-class FileDispatcherV5(AbstractFileDispatcher):
-    CRYPT_VALUE = 0x69
-    BLOCK_NAME_LENGTH = 4
-    BLOCK_MAP = {
-        # Root
-        r"LECF" : BlockLECFV5,
-        # LECF
-        # -LFLF
-        r"ROOM" : BlockROOMV5,
-        # --ROOM
-        r"BOXD.dmp" : BlockDefaultV5,
-        r"BOXM.dmp" : BlockDefaultV5,
-        r"CLUT.dmp" : BlockDefaultV5,
-        r"CYCL.dmp" : BlockDefaultV5,
-        r"EPAL.dmp" : BlockDefaultV5,
-        r"SCAL.dmp" : BlockDefaultV5,
-        r"TRNS.dmp" : BlockDefaultV5,
-        r"RMHD.xml" : BlockRMHDV5,
-        r"RMIM" : BlockContainerV5,
-        r"objects" : ObjectBlockContainer,
-        r"scripts" : ScriptBlockContainer,
-        # ---RMIM
-        r"RMIH.xml" : BlockRMIHV5,
-        # ---objects (incl. subdirs)
-        r"VERB.dmp" : BlockDefaultV5,
-        r"SMAP.dmp" : BlockDefaultV5, # also RMIM
-        r"BOMP.dmp" : BlockDefaultV5, # room 99, object 1045 in MI1 CD.
-        # ---scripts
-        r"ENCD.dmp" : BlockDefaultV5,
-        r"EXCD.dmp" : BlockDefaultV5,
-        # - Sound blocks
-        r"SOU" : BlockSOUV5,
-        r"ROL.mid" : BlockMIDISoundV5,
-        r"SPK.mid" : BlockMIDISoundV5,
-        r"ADL.mid" : BlockMIDISoundV5,
-        r"SBL.voc" : BlockSBLV5,
-        
-    }
-    REGEX_BLOCKS = [
-        # LECF
-        (re.compile(r"LFLF_[0-9]{3}.*"), BlockLFLFV5),
-        # -LFLF
-        (re.compile(r"SOUN_[0-9]{3}(?:\.dmp)?"), BlockSOUNV5),
-        (re.compile(r"CHAR_[0-9]{3}"), BlockGloballyIndexedV5),
-        (re.compile(r"COST_[0-9]{3}"), BlockGloballyIndexedV5),
-        (re.compile(r"SCRP_[0-9]{3}"), BlockGloballyIndexedV5),
-        # --ROOM
-        # ---objects
-        (re.compile(r"IM[0-9a-fA-F]{2}"), BlockContainerV5), # also RMIM
-        (re.compile(r"ZP[0-9a-fA-F]{2}\.dmp"), BlockDefaultV5), # also RMIM
-        # --scripts
-        (re.compile(r"LSCR_[0-9]{3}\.dmp"), BlockLSCRV5)
-    ]
-    IGNORED_BLOCKS = frozenset([
-        r"ROL.mdhd",
-        r"SPK.mdhd",
-        r"ADL.mdhd",
-        r"SBL.mdhd",
-        r"order.xml"
-    ])
-    DEFAULT_BLOCK = BlockDefaultV5
-
-class IndexFileDispatcherV5(AbstractFileDispatcher):
-    CRYPT_VALUE = 0x69
-    BLOCK_NAME_LENGTH = 4
-    BLOCK_MAP = {
-        #r"maxs\.xml" : BlockMAXSV5,
-        #r"roomnames\.xml" : BlockRNAMV5,
-        #r"DOBJ\.dmp" : BlockDOBJV5,
-        #r"DROO\.dmp" : BlockDefaultV5
-    }
-    REGEX_BLOCKS = [
-    ]
-    DEFAULT_BLOCK = BlockDefaultV5
 
 class BlockRNAMV5(BlockDefaultV5):
     name_length = 9
@@ -1638,7 +1477,7 @@ class BlockRNAMV5(BlockDefaultV5):
         
         for room_no, room_name in self.room_names:
             room = et.SubElement(root, "room")
-            et.SubElement(room, "id").text = str(room_no)
+            et.SubElement(room, "id").text = util.output_int_to_xml(room_no)
             et.SubElement(room, "name").text = util.escape_invalid_chars(room_name)
         
         util.indent_elementtree(root)
@@ -1650,16 +1489,16 @@ class BlockRNAMV5(BlockDefaultV5):
 
         self.room_names = []
         for room in root.findall("room"):
-            room_no = int(room.find("id").text)
+            room_no = util.parse_int_from_xml(room.find("id").text)
             room_name = room.find("name").text
             self.room_names.append((room_no, room_name))
             control.global_index_map.map_index(self.name, room_no, room_name)
 
     def save_to_resource(self, resource, room_start=0):
-        self.size = 10 * len(self.room_names) + self.block_name_length + 4
+        self.size = 10 * len(self.room_names) + 1 + self.block_name_length + 4
         self._write_header(resource, True)
         for room_no, room_name in self.room_names:
-            resource.write(util.int_to_str(room_no, 1, crypt_val=self.crypt_value ^ 0xFF))
+            resource.write(util.int_to_str(room_no, 1, crypt_val=self.crypt_value))
             # pad/truncate room name to 8 characters
             room_name = (room_name + ("\x00" * (self.name_length - len(room_name)))
                 if len(room_name) < self.name_length
@@ -1697,15 +1536,15 @@ class BlockMAXSV5(BlockDefaultV5):
     def save_to_file(self, path):
         root = et.Element("maximums")
         
-        et.SubElement(root, "variables").text = str(self.num_vars)
-        et.SubElement(root, "unknown_1").text = str(self.unknown_1)
-        et.SubElement(root, "bit_variables").text = str(self.bit_vars)
-        et.SubElement(root, "local_objects").text = str(self.local_objects)
-        et.SubElement(root, "unknown_2").text = str(self.unknown_2)
-        et.SubElement(root, "character_sets").text = str(self.char_sets)
-        et.SubElement(root, "unknown_3").text = str(self.unknown_3)
-        et.SubElement(root, "unknown_4").text = str(self.unknown_4)
-        et.SubElement(root, "inventory_objects").text = str(self.inventory_objects)
+        et.SubElement(root, "variables").text = util.output_int_to_xml(self.num_vars)
+        et.SubElement(root, "unknown_1").text = util.output_int_to_xml(self.unknown_1)
+        et.SubElement(root, "bit_variables").text = util.output_int_to_xml(self.bit_vars)
+        et.SubElement(root, "local_objects").text = util.output_int_to_xml(self.local_objects)
+        et.SubElement(root, "unknown_2").text = util.output_int_to_xml(self.unknown_2)
+        et.SubElement(root, "character_sets").text = util.output_int_to_xml(self.char_sets)
+        et.SubElement(root, "unknown_3").text = util.output_int_to_xml(self.unknown_3)
+        et.SubElement(root, "unknown_4").text = util.output_int_to_xml(self.unknown_4)
+        et.SubElement(root, "inventory_objects").text = util.output_int_to_xml(self.inventory_objects)
         
         util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "maxs.xml"))
@@ -1716,15 +1555,15 @@ class BlockMAXSV5(BlockDefaultV5):
 
         self.size = 18 + self.block_name_length + 4
 
-        self.num_vars = int(root.find("variables").text)
-        self.unknown_1 = int(root.find("unknown_1").text)
-        self.bit_vars = int(root.find("bit_variables").text)
-        self.local_objects = int(root.find("local_objects").text)
-        self.unknown_2 = int(root.find("unknown_2").text)
-        self.char_sets = int(root.find("character_sets").text)
-        self.unknown_3 = int(root.find("unknown_3").text)
-        self.unknown_4 = int(root.find("unknown_4").text)
-        self.inventory_objects = int(root.find("inventory_objects").text)
+        self.num_vars = util.parse_int_from_xml(root.find("variables").text)
+        self.unknown_1 = util.parse_int_from_xml(root.find("unknown_1").text)
+        self.bit_vars = util.parse_int_from_xml(root.find("bit_variables").text)
+        self.local_objects = util.parse_int_from_xml(root.find("local_objects").text)
+        self.unknown_2 = util.parse_int_from_xml(root.find("unknown_2").text)
+        self.char_sets = util.parse_int_from_xml(root.find("character_sets").text)
+        self.unknown_3 = util.parse_int_from_xml(root.find("unknown_3").text)
+        self.unknown_4 = util.parse_int_from_xml(root.find("unknown_4").text)
+        self.inventory_objects = util.parse_int_from_xml(root.find("inventory_objects").text)
 
     def _write_data(self, outfile, encrypt):
         """ Assumes it's writing to a resource."""
@@ -1745,12 +1584,18 @@ class BlockIndexDirectoryV5(BlockDefaultV5):
         #"DOBJ" : "OBCD"
     }
     MIN_ENTRIES = {
-        #"DROO" : "ROOM",
-        "DSCR" : 199,
-        "DSOU" : 150,
-        "DCOS" : 150,
-        "DCHR" : 7
-        #"DOBJ" : "OBCD"
+        "MI1CD" : {
+            "DSCR" : 199,
+            "DSOU" : 150,
+            "DCOS" : 150,
+            "DCHR" : 7
+        },
+        "MI2" : {
+            "DSCR" : 199,
+            "DSOU" : 254,
+            "DCOS" : 199,
+            "DCHR" : 9
+        }
     }
     
     def _read_data(self, resource, start, decrypt):
@@ -1782,13 +1627,14 @@ class BlockIndexDirectoryV5(BlockDefaultV5):
         item_map = {}
         if len(items) == 0:
             util.information("No indexes found for block type \"" + self.name + "\" - are there any files of this block type?")
-            num_items = self.MIN_ENTRIES[self.name]
+            num_items = self.MIN_ENTRIES[control.global_args.game][self.name]
         else:
             items.sort(cmp=lambda x, y: cmp(x[1], y[1])) # sort by resource number
             # Need to pad items out, so take last entry's number as the number of items
             num_items = items[-1][1]
-            if self.name in self.MIN_ENTRIES and num_items < self.MIN_ENTRIES[self.name]:
-                num_items = self.MIN_ENTRIES[self.name]
+            if self.name in self.MIN_ENTRIES[control.global_args.game] and \
+               num_items < self.MIN_ENTRIES[control.global_args.game][self.name]:
+                num_items = self.MIN_ENTRIES[control.global_args.game][self.name]
             # Create map with reversed key/value pairs
             for i, j in items:
                 item_map[j] = i
@@ -1802,10 +1648,15 @@ class BlockIndexDirectoryV5(BlockDefaultV5):
             if not i in item_map:
                 # write dummy values for unused item numbers.
                 resource.write(util.int_to_str(0, 1, crypt_val=self.crypt_value))
+            else:
+                room_num, _ = item_map[i]
+                resource.write(util.int_to_str(room_num, 1, crypt_val=self.crypt_value))
+        for i in xrange(num_items):
+            if not i in item_map:
+                # write dummy values for unused item numbers.
                 resource.write(util.int_to_str(0, 4, crypt_val=self.crypt_value))
             else:
-                room_num, offset = item_map[i]
-                resource.write(util.int_to_str(room_num, 1, crypt_val=self.crypt_value))
+                _, offset = item_map[i]
                 resource.write(util.int_to_str(offset, 4, crypt_val=self.crypt_value))
             
 class BlockDOBJV5(BlockDefaultV5):
@@ -1814,13 +1665,16 @@ class BlockDOBJV5(BlockDefaultV5):
     def _read_data(self, resource, start, decrypt):
         num_items = util.str_to_int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
         self.objects = []
-        i = num_items
-        while i > 0:
+        # Write all owner+state values
+        for _ in xrange(num_items):
             owner_and_state = util.str_to_int(resource.read(1), crypt_val=(self.crypt_value if decrypt else None))
             owner = (owner_and_state & 0xF0) >> 4
             state = owner_and_state & 0x0F
-            self.objects.append((owner, state))
-            i -= 1
+            self.objects.append([owner, state])
+        # Write all class data values
+        for i in xrange(num_items):
+            class_data = util.str_to_int(resource.read(4), crypt_val=(self.crypt_value if decrypt else None))
+            self.objects[i].append(class_data)
             
     def load_from_file(self, path):
         tree = et.parse(path)
@@ -1828,20 +1682,23 @@ class BlockDOBJV5(BlockDefaultV5):
         self.objects = []
         for obj_node in tree.getiterator("object-entry"):
             obj_id = int(obj_node.find("id").text)
-            assert obj_id == len(self.objects) + 1, "Entries in object ID must be in sorted order with no gaps in ID numbering."
-            owner = int(obj_node.find("owner").text)
-            state = int(obj_node.find("state").text)
-            self.objects.append((owner, state))
+            if obj_id != obj_id == len(self.objects) + 1:
+                raise util.ScummPackerException("Entries in object ID XML must be in sorted order with no gaps in ID numbering.")
+            owner = util.parse_int_from_xml(obj_node.find("owner").text)
+            state = util.parse_int_from_xml(obj_node.find("state").text)
+            class_data = util.parse_int_from_xml(obj_node.find("class-data").text)
+            self.objects.append([owner, state, class_data])
 
     def save_to_file(self, path):
         root = et.Element("object-directory")
 
         for i in xrange(len(self.objects)):
-            owner, state = self.objects[i]
+            owner, state, class_data = self.objects[i]
             obj_node = et.SubElement(root, "object-entry")
-            et.SubElement(obj_node, "id").text = str(i + 1)
-            et.SubElement(obj_node, "owner").text = str(owner)
-            et.SubElement(obj_node, "state").text = str(state)
+            et.SubElement(obj_node, "id").text = util.output_int_to_xml(i + 1)
+            et.SubElement(obj_node, "owner").text = util.output_int_to_xml(owner)
+            et.SubElement(obj_node, "state").text = util.output_int_to_xml(state)
+            et.SubElement(obj_node, "class-data").text = util.output_int_to_xml(class_data, util.HEX)
 
         util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "dobj.xml"))
@@ -1851,23 +1708,30 @@ class BlockDOBJV5(BlockDefaultV5):
         86 and 88 exist but not 87, create a dummy entry for 87."""
         num_items = len(self.objects)
 
-        self.size = 1 * num_items + 2 + self.block_name_length + 4
+        self.size = 5 * num_items + 2 + self.block_name_length + 4
         self._write_header(resource, True)
 
         resource.write(util.int_to_str(num_items, 2, crypt_val=self.crypt_value))
-        for owner, state in self.objects:
+        for owner, state, _ in self.objects:
             combined_val = ((owner & 0x0F) << 4) | (state & 0x0F)
             resource.write(util.int_to_str(combined_val, 1, crypt_val=self.crypt_value))
+        for _, _, class_data in self.objects:
+            resource.write(util.int_to_str(class_data, 4, crypt_val=self.crypt_value))
 
 class BlockDROOV5(BlockDefaultV5):
     """DROO indexes don't seem to be used in V5.
 
-    MI1 CD has 127 entries?"""
+    MI1 CD has 100 entries, MI2 127?"""
     name = "DROO"
+    DEFAULT_PADDING_LENGTHS = {
+        "MI1CD" : 100,
+        "MI2" : 127
+    }
 
     def __init__(self, *args, **kwds):
         # default padding length is 127 for now
-        self.padding_length = kwds.get('padding_length', 100)
+        self.padding_length = kwds.get('padding_length',
+                                       self.DEFAULT_PADDING_LENGTHS[control.global_args.game])
         super(BlockDROOV5, self).__init__(*args, **kwds)
 
     """Directory of offsets to ROOM blocks."""
@@ -1886,107 +1750,34 @@ class BlockDROOV5(BlockDefaultV5):
             resource.write(util.int_to_str(0, 1, crypt_val=self.crypt_value))
         for _ in xrange(self.padding_length):
             resource.write(util.int_to_str(0, 4, crypt_val=self.crypt_value))
-
-
-class IndexBlockContainerV5(AbstractBlockDispatcher):
-    """Resource.000 processor; just maps blocks to Python objects (POPOs?)."""
-    CRYPT_VALUE = 0x69
-    BLOCK_NAME_LENGTH = 4
-    BLOCK_MAP = {
-        "RNAM" : BlockRNAMV5,
-        "MAXS" : BlockMAXSV5,
-        "DROO" : BlockDROOV5,
-        "DSCR" : BlockIndexDirectoryV5,
-        "DSOU" : BlockIndexDirectoryV5,
-        "DCOS" : BlockIndexDirectoryV5,
-        "DCHR" : BlockIndexDirectoryV5,
-        "DOBJ" : BlockDOBJV5
-    }
-    REGEX_BLOCKS = []
-    DEFAULT_BLOCK = BlockDefaultV5
-    
-    def load_from_resource(self, resource, room_start=0):
-        self.children = []
-        for i in xrange(len(self.BLOCK_MAP.keys())):
-            block = self.dispatch_next_block(resource)
-            block.load_from_resource(resource)
-            self.children.append(block)
-            
-    def save_to_file(self, path):
-        for c in self.children:
-            c.save_to_file(path)
-
-    def load_from_file(self, path):
-        self.children = []
-
-        # Crappy crappy crap
-        # It's like this because blocks need to be in a specific order
-        rnam_block = BlockRNAMV5(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
-        rnam_block.load_from_file(os.path.join(path, "roomnames.xml"))
-        self.children.append(rnam_block)
-
-        maxs_block = BlockMAXSV5(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
-        maxs_block.load_from_file(os.path.join(path, "maxs.xml"))
-        self.children.append(maxs_block)
-
-        d_block = BlockDROOV5(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
-        self.children.append(d_block)
-        d_block = BlockIndexDirectoryV5(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
-        d_block.name = "DSCR"
-        self.children.append(d_block)
-        d_block = BlockIndexDirectoryV5(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
-        d_block.name = "DSOU"
-        self.children.append(d_block)
-        d_block = BlockIndexDirectoryV5(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
-        d_block.name = "DCOS"
-        self.children.append(d_block)
-        d_block = BlockIndexDirectoryV5(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
-        d_block.name = "DCHR"
-        self.children.append(d_block)
-
-        dobj_block = BlockDOBJV5(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
-        dobj_block.load_from_file(os.path.join(path, "dobj.xml"))
-        self.children.append(dobj_block)
-
-    def save_to_resource(self, resource, room_start=0):
-        for c in self.children:
-            util.debug("Saving index: " + c.name)
-            c.save_to_resource(resource, room_start)
-        
     
 def __test_unpack():
-    global block_dispatcher
-    
-    #outpath = os.getcwd()
+    import scummpacker_dispatchers as dispatchers
     outpath = "D:\\TEMP"
     
-    dirfile = file("MONKEY.000", "rb")
-    dir_block = IndexBlockContainerV5()
+    dirfile = file("MONKEY2.000", "rb")
+    dir_block = dispatchers.IndexBlockContainerV5()
     dir_block.load_from_resource(dirfile)
     dirfile.close()
     
     dir_block.save_to_file(outpath)
     
-    block_dispatcher = BlockDispatcherV5()
-    resfile = file("MONKEY.001", "rb")
+    control.block_dispatcher = dispatchers.BlockDispatcherV5()
+    resfile = file("MONKEY2.001", "rb")
     block = BlockLECFV5(4, 0x69)
     block.load_from_resource(resfile)
-    #print block
     resfile.close()
     
     block.save_to_file(outpath)
 
 def __test_unpack_from_file():
-    global file_dispatcher
 
-    #outpath = os.getcwd()
     outpath = "D:\\TEMP"
 
     inpath = os.path.join(outpath, "LECF")
     block = BlockLECFV5(4, 0x69)
     block.load_from_file(inpath)
 
-    #print block
     util.information("read from file, now saving to file")
 
     outpath = os.path.join(outpath, "outtest")
@@ -1995,24 +1786,16 @@ def __test_unpack_from_file():
     block.save_to_file(outpath)
 
 def __test_pack():
-    global file_dispatcher
-
-    #outpath = os.getcwd()
+    import scummpacker_dispatchers as dispatchers
     startpath = "D:\\TEMP"
     
     inpath = os.path.join(startpath, "LECF")
     block = BlockLECFV5(4, 0x69)
     block.load_from_file(inpath)
-    index_block = IndexBlockContainerV5()
+    index_block = dispatchers.IndexBlockContainerV5()
     index_block.load_from_file(startpath)
     
-    #print block
     util.information("read from file, now saving to resource")
-    
-    #outpath = os.path.join(outpath, "outtest")
-    #os.mkdir(outpath)
-    
-    #block.save_to_file(outpath)
 
     outpath_res = os.path.join(startpath, "outres.001")
     with file(outpath_res, 'wb') as outres:
@@ -2023,7 +1806,7 @@ def __test_pack():
 
 
 def __test():
-    #__test_unpack()
+    __test_unpack()
     #__test_unpack_from_file()
     __test_pack()
     
