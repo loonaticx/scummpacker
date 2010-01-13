@@ -219,7 +219,7 @@ class BlockGloballyIndexedV5(BlockDefaultV5):
             self.index = control.global_index_map.get_index(self.name, 
                                                              (room_num, location - room_offset))
         except util.ScummPackerUnrecognisedIndexException, suie:
-            util.error("Block \"" 
+            logging.error("Block \""
                        + str(self.name)
                        + "\" at offset "
                        + str(location)
@@ -1353,7 +1353,7 @@ class BlockLFLFV5(BlockContainerV5, BlockGloballyIndexedV5):
         try:
             self.index = control.global_index_map.get_index(self.name, location)
         except util.ScummPackerUnrecognisedIndexException, suie:
-            util.error("Block \"" 
+            logging.error("Block \""
                        + str(self.name)
                        + "\" at offset "
                        + str(location)
@@ -1369,7 +1369,7 @@ class BlockLFLFV5(BlockContainerV5, BlockGloballyIndexedV5):
         super(BlockLFLFV5, self).save_to_resource(resource, room_start)
 
     def save_to_file(self, path):
-        util.information("Saving block " 
+        logging.info("Saving block "
                          + self.name 
                          + ":" 
                          + ("unk_" if self.is_unknown else "")
@@ -1595,6 +1595,12 @@ class BlockIndexDirectoryV5(BlockDefaultV5):
             "DSOU" : 254,
             "DCOS" : 199,
             "DCHR" : 9
+        },
+        "FOA" : { # TODO: find out real values
+            "DSCR" : 199,
+            "DSOU" : 254,
+            "DCOS" : 199,
+            "DCHR" : 9
         }
     }
     
@@ -1626,7 +1632,7 @@ class BlockIndexDirectoryV5(BlockDefaultV5):
         items = control.global_index_map.items(self.DIR_TYPES[self.name])
         item_map = {}
         if len(items) == 0:
-            util.information("No indexes found for block type \"" + self.name + "\" - are there any files of this block type?")
+            logging.info("No indexes found for block type \"" + self.name + "\" - are there any files of this block type?")
             num_items = self.MIN_ENTRIES[control.global_args.game][self.name]
         else:
             items.sort(cmp=lambda x, y: cmp(x[1], y[1])) # sort by resource number
@@ -1725,7 +1731,8 @@ class BlockDROOV5(BlockDefaultV5):
     name = "DROO"
     DEFAULT_PADDING_LENGTHS = {
         "MI1CD" : 100,
-        "MI2" : 127
+        "MI2" : 127,
+        "FOA" : 127 # TODO: find out real value
     }
 
     def __init__(self, *args, **kwds):
@@ -1778,7 +1785,7 @@ def __test_unpack_from_file():
     block = BlockLECFV5(4, 0x69)
     block.load_from_file(inpath)
 
-    util.information("read from file, now saving to file")
+    logging.info("read from file, now saving to file")
 
     outpath = os.path.join(outpath, "outtest")
     if not os.path.isdir(outpath):
@@ -1795,7 +1802,7 @@ def __test_pack():
     index_block = dispatchers.IndexBlockContainerV5()
     index_block.load_from_file(startpath)
     
-    util.information("read from file, now saving to resource")
+    logging.info("read from file, now saving to resource")
 
     outpath_res = os.path.join(startpath, "outres.001")
     with file(outpath_res, 'wb') as outres:

@@ -146,14 +146,28 @@ class GlobalArguments(object):
                     self.SCUMM_VERSION_GAME_MAP[game])
 
     def set_input_file_name(self, input_file_name):
-        if input_file_name == None:
-            if self.game == None:
-                raise util.ScummPackerException("No game specified; can't guess input file name.")
-            super(GlobalArguments, self).__setattr__("input_file_name",
-                    self.RESOURCE_FILE_NAME_MAP[self.game])
-        else:
-            super(GlobalArguments, self).__setattr__("input_file_name",
-                    os.path.splitext(input_file_name)[0])
+        if self.unpack:
+            if input_file_name == None:
+                if self.game == None:
+                    raise util.ScummPackerException("No game specified; can't guess input file name.")
+                super(GlobalArguments, self).__setattr__("input_file_name",
+                        self.RESOURCE_FILE_NAME_MAP[self.game])
+            elif os.path.isdir(input_file_name):
+                if self.game == None:
+                    raise util.ScummPackerException("No game specified; can't guess input file name.")
+                super(GlobalArguments, self).__setattr__("input_file_name",
+                        os.path.join(os.path.splitext(input_file_name)[0], self.RESOURCE_FILE_NAME_MAP[self.game]))
+            else:
+                super(GlobalArguments, self).__setattr__("input_file_name",
+                        os.path.splitext(input_file_name)[0])
+        elif self.pack:
+            if input_file_name == None:
+                raise util.ScummPackerException("No input directory specified.")
+            elif not os.path.isdir(input_file_name):
+                raise util.ScummPackerException("Input does not appear to be a valid directory.")
+            else:
+                super(GlobalArguments, self).__setattr__("input_file_name",
+                        input_file_name)
 
     def __setattr__(self, item, value):
         if item == "game":
@@ -168,12 +182,12 @@ class GlobalArguments(object):
     def parse_args(self):
         options, _ = self.oparser.parse_args()
         # @type options Values
+        self.unpack = options.unpack
+        self.pack = options.pack
         self.scumm_version = options.scumm_version
         self.game = options.game
         self.input_file_name = options.input_file_name
         self.output_file_name = options.output_file_name
-        self.unpack = options.unpack
-        self.pack = options.pack
 
     def print_help(self):
         self.oparser.print_help()
