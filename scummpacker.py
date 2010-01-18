@@ -14,7 +14,7 @@ __date__ ="$22/12/2009 16:52:52$"
 
 def main():
     try:
-        logging.basicConfig(format="")
+        logging.basicConfig(format="", level=logging.INFO)
         # Delegate argument parsing to the global arguments container
         control.global_args.parse_args()
 

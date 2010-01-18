@@ -283,7 +283,6 @@ class BlockContainerV5(BlockDefaultV5):
     
     def append(self, block):
         # Maintain sorted order for children
-        #TODO: use bisect module for sorted insertion?
         # @type order_list list
         global block_order_res_v5
         rank_lookup_name = block.name
@@ -683,7 +682,7 @@ class ScriptBlockContainer(object):
         if not self.encd_script or not self.excd_script:
             room_num = control.global_index_map.get_index("LFLF", room_start)
             raise util.ScummPackerException(
-                "Room #" + str(room_num) + " appears to be missing either a room entry or exit script.")
+                "Room #" + str(room_num) + " appears to be missing either a room entry or exit script (or both).")
         self.excd_script.save_to_resource(resource, room_start)
         self.encd_script.save_to_resource(resource, room_start)
         # Generate and write NLSC block (could be prettier, should have its own class)
@@ -761,7 +760,10 @@ class ObjectBlockContainer(object):
         if not os.path.isdir(objects_path):
             os.mkdir(objects_path) # throws an exception if can't create dir
         for objimage, objcode in self.objects.values():
-            newpath = os.path.join(objects_path, str(objcode.obj_id).zfill(self.OBJ_ID_LENGTH) + "_" + util.discard_invalid_chars(objcode.obj_name))
+            # New path name = Object ID + object name (removing trailing spaces)
+            obj_path_name = str(objcode.obj_id).zfill(self.OBJ_ID_LENGTH) + "_" + util.discard_invalid_chars(objcode.obj_name).rstrip()
+            #logging.debug("Writing object: %s" % obj_path_name)
+            newpath = os.path.join(objects_path, obj_path_name)
             if not os.path.isdir(newpath):
                 os.mkdir(newpath) # throws an exception if can't create dir
             objimage.save_to_file(newpath)
@@ -770,7 +772,6 @@ class ObjectBlockContainer(object):
         self._save_order_to_xml(objects_path)
 
     def save_to_resource(self, resource, room_start=0):
-        # TODO: keep track of where objects are written in the resource
         object_keys = self.objects.keys()
         # Write all image blocks first
         object_keys = util.ordered_sort(object_keys, self.order_map["OBIM"])
@@ -1491,6 +1492,9 @@ class BlockRNAMV5(BlockDefaultV5):
         for room in root.findall("room"):
             room_no = util.parse_int_from_xml(room.find("id").text)
             room_name = room.find("name").text
+            if room_name == None:
+                room_name = ''
+            room_name = util.unescape_invalid_chars(room_name)
             self.room_names.append((room_no, room_name))
             control.global_index_map.map_index(self.name, room_no, room_name)
 
@@ -1596,11 +1600,11 @@ class BlockIndexDirectoryV5(BlockDefaultV5):
             "DCOS" : 199,
             "DCHR" : 9
         },
-        "FOA" : { # TODO: find out real values
-            "DSCR" : 199,
-            "DSOU" : 254,
-            "DCOS" : 199,
-            "DCHR" : 9
+        "FOA" : {
+            "DSCR" : 200,
+            "DSOU" : 250,
+            "DCOS" : 244,
+            "DCHR" : 6
         }
     }
     
@@ -1727,12 +1731,12 @@ class BlockDOBJV5(BlockDefaultV5):
 class BlockDROOV5(BlockDefaultV5):
     """DROO indexes don't seem to be used in V5.
 
-    MI1 CD has 100 entries, MI2 127?"""
+    Each game seems to have a different padding length."""
     name = "DROO"
     DEFAULT_PADDING_LENGTHS = {
         "MI1CD" : 100,
         "MI2" : 127,
-        "FOA" : 127 # TODO: find out real value
+        "FOA" : 99
     }
 
     def __init__(self, *args, **kwds):

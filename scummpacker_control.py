@@ -169,6 +169,17 @@ class GlobalArguments(object):
                 super(GlobalArguments, self).__setattr__("input_file_name",
                         input_file_name)
 
+    def set_output_file_name(self, output_file_name):
+        # @type output_file_name str
+        if self.unpack:
+            super(GlobalArguments, self).__setattr__("output_file_name",
+                        output_file_name)
+        elif self.pack:
+            if output_file_name.endswith('.000') or output_file_name.endswith('.001'):
+                output_file_name = output_file_name[:-4]
+            super(GlobalArguments, self).__setattr__("output_file_name",
+                        output_file_name)
+
     def __setattr__(self, item, value):
         if item == "game":
             self.set_game(value)
@@ -176,6 +187,8 @@ class GlobalArguments(object):
             self.set_scumm_version(value)
         elif item == "input_file_name":
             self.set_input_file_name(value)
+        elif item == "output_file_name":
+            self.set_output_file_name(value)
         else:
             super(GlobalArguments, self).__setattr__(item, value)
 

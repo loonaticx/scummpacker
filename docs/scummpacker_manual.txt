@@ -1,0 +1,147 @@
+ScummPacker v3
+==============
+Laurence Dougal Myers <jestarjokin@jestarjokin.net>
+Doc v1.0, January 2010
+
+Introduction
+============
+ScummPacker is a tool to unpack and re-pack the game resources used in Lucsarts adventure games.
+
+Lucasarts games are usually identified by the engine version. The engine is usually referred to as SCUMM (Script Creation Utility for Maniac Mansion). Currently, ScummPacker only supports SCUMM v5 games - Monkey Island 1 CD, Monkey Island 2, and Indiana Jones and the Fate of Atlantis.
+
+ScummPacker has the capability to pack game resources for use within a certain game, or to target a generic SCUMM version; you could theoretically pack entirely new game resources, creating a new game. However, ScummPacker's primary use is for modifying existing game reources. If you're looking to make a new game, I suggest investigating either ScummC, ScummGen, or Adventure Game Studio. 
+
+Some resources can be intelligently decoded; most header information is exported to XML files, and sound files like VOCs and MIDIs are unwrapped from their containing blocks.
+
+Usage
+-----
+To unpack a game, you must specify an input file and an output directory. ScummPacker can try to guess the SCUMM version and game based on the name of the input file, but you can specify these values manually.
+
+--------------------------------------
+scummpacker -p -i D:\Games\MI2\MONKEY2.000 -o D:\temp
+--------------------------------------
+
+To pack a game, you must specify an input directory and an output file, AND the game or SCUMM version.
+
+--------------------------------------
+scummpacker -u -i D:\temp -o D:\temp\MI2repack.000 -g MI2
+--------------------------------------
+
+Here are the options useable in ScummPacker:
+--------------------------------------
+ --version
+  Display the version of ScummPacker
+ -h, --help 
+  Print out options help
+ -v SCUMM-VERSION, --scumm-version=SCUMM-VERSION
+  Specify the SCUMM version to target. Possible options are: 5
+ -g GAME, --game=GAME
+  Specify the game to target. Possible options are: MI2, FOA, MI1CD
+ -i INPUT_FILE_NAME, --input-file-name=INPUT_FILE_NAME
+  Specify an input file name. If unpacking, and an input file name is not specified, but the -g option is supplied, Scummpacker will try to guess the file name.
+ -o OUTPUT_FILE_NAME, --output-file-name=OUTPUT_FILE_NAME
+  Specify an output file name. If unpacking, the output file name will have .000 and .001 appended. If the specified output file name already ends in .000 or .001, the name will be taken as everything preceding that extension.
+ -u, --unpack
+  Unpack resources.
+ -p, --pack
+  Pack resources.
+--------------------------------------
+
+Advanced Usage
+--------------
+Here are a few oddities that you might need to know.
+
+Block Orders
+~~~~~~~~~~~~
+Sometimes, blocks within the game resources are not in sorted order. For instance, if a room contains objects with IDs of 146, 147, and 148, the object image blocks may be in order 148, 146, 147, and the object code blocks may be in order 147, 148, 146! 
+
+To support this odd ordering, each directory could contain an XML file called "order.xml". This file determines the orders for certain block types. If this file is absent, the blocks will be packed in sorted order. 
+
+Index File Padding
+~~~~~~~~~~~~~~~~~~
+The .000 resource files contain indexes of resource blocks in the .001 resource file. However, some games pad the number of entries in the indexes beyond the number of resources.
+
+ScummPacker will replicate this padding. If a SCUMM version is specified but no game is specified, ScummPacker will select a default game based on the SCUMM version.
+
+Adding more resources beyond the padding limit may work; then again, it may not.
+
+Default games for SCUMM versions:
+ SCUMM v5 = Monkey Island 2 
+
+Index Files and Resource Numbering
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Specific resource IDs are normally stored in the .000 resource file, which stores indexes of resource blocks as offsets within the .001 file. While unpacking, these IDs are encoded in filenames, e.g. costume 139 might be called 'COST_139.dmp'. These IDs will be used when repacking the files.
+
+Some game resource files could contain unused resource blocks; these blocks do not contain an entry in the index file. They will be extracted with a name comprising of the resource type, "unk", and a number (incrementing for each unknown block of that resource type), e.g. "SOUN_unk_001". When packing, these files will be ignored, unless you specifically rename them to match the format of indexed resources, e.g. "SOUN_049".
+
+Some index files contain extra information that cannot be automatically generated. These will be extracted as XML files.
+
+ SCUMM 5:
+ dobj.xml = directory of objects and class data. The object information is mostly dummy data, it's the class data that's important. NOTE: objects MUST be in sequential order, and there can be NO gaps in the object numbering (just because that's how I wrote ScummPacker)!
+ maxs.xml = maximum values, basically configuration options for the SCUMM engine.
+ roomnames.xml = human-readable names for the rooms in the game. Each name is limited to 9 characters. Seem to be only for developer's use.
+
+MIDI Files
+~~~~~~~~~~
+Generally, MIDI files are stored in the game resources with the same header information, but there are some exceptions. ScummPacker will normally use the default header information, but if the header is different, the following will occur:
+
+1) While unpacking, if the header is unusual, it will be dumped as a file with the extension '.mdhd'
+
+2) While packing, if there is a file ending in the extension '.mdhd', this file is used for the MIDI file being read in. For instance, if there is a file "ROL.mid" (representing music for the Roland MT-32), and another file called "ROL.mdhd", the non-standard header contained in the ".mdhd" file will be read.
+
+SCUMM Version and Games
+~~~~~~~~~~~~~~~~~~~~~~~
+Just in case you were wondering...
+
+SCUMM v2 (unsupported)
+ Maniac Mansion
+ Zak McKracken and the Alien Mindbenders
+
+SCUMM v3 (unsupported)
+ Indiana Jones and the Last Crusade (EGA)
+ Indiana Jones and the Last Crusade (VGA)
+ Loom
+ Zak McKracken and the Alien Mindbenders (FM-TOWNS) 
+
+SCUMM v4 (unsupported)
+ Loom (CD)
+ Monkey Island 1 (EGA)
+ Monkey Island 1 (VGA)
+
+SCUMM v5
+ Indiana Jones and the Fate of Atlantis
+ Monkey Island 1 (CD)
+ Monkey Island 2
+
+SCUMM v6 (unsupported)
+ Day of the Tentacle
+ Sam and Max Hit the Road
+
+Future Tasks
+------------
+Support for other versions of SCUMM (V3, V4, maybe V6).
+
+Integrate with descumm to decompile scripts (once we can be sure that descumm's output is always correct).
+
+Decoding and encoding of images (room and objects).
+
+Decoding and encoding of costumes. Probably requires intelligent handling of palettes.
+
+Support
+-------
+This program and its source code is available at <http://www.jestarjokin.net>.
+
+Any enquiries can be sent directly to Laurence at <jestarjokin@jestarjokin.net>.
+
+License
+-------
+This program is released into the public domain.
+
+ifdef::backend-docbook[]
+Index
+-----
+////////////////////////////////////////////////////////////////
+The index is normally left completely empty, it's contents being
+generated automatically by the DocBook toolchain.
+////////////////////////////////////////////////////////////////
+endif::backend-docbook[]
