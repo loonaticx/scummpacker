@@ -6,15 +6,17 @@ import sys
 import traceback
 import scummpacker_util as util
 import scummpacker_control as control
-import scummpacker_blocks as blocks
-import scummpacker_dispatchers as dispatchers
+import dispatchers
 
 __author__="Laurence Dougal Myers"
 __date__ ="$22/12/2009 16:52:52$"
 
+if sys.version_info[0] < 2 or (sys.version_info[0] == 2 and sys.version_info[1] < 5):
+    raise util.ScummPackerException("ScummPacker requires Python 2.5 or higher.")
+
 def main():
     try:
-        logging.basicConfig(format="", level=logging.INFO)
+        logging.basicConfig(format="", level=logging.DEBUG)
         # Delegate argument parsing to the global arguments container
         control.global_args.parse_args()
 
@@ -35,7 +37,7 @@ def main():
                                             str(control.global_args.output_file_name))
             # Get our dispatchers that know about the version-specific stuff.
             index_dispatcher, block_dispatcher, file_dispatcher = dispatchers.DispatcherFactory(control.global_args.scumm_version)
-            blocks.block_dispatcher = block_dispatcher # crap, how to refactor this?
+            control.block_dispatcher = block_dispatcher # crap, how to refactor this?
             # Load from resources
             logging.critical("Loading from game resources...")
             with file(control.global_args.input_file_name + ".000", 'rb') as index_file:

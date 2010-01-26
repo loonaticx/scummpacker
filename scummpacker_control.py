@@ -1,3 +1,4 @@
+#! /usr/bin/python
 # Stores globals
 import os.path
 from optparse import OptionParser
@@ -68,16 +69,19 @@ class IndexMappingContainer(object):
     
 class GlobalArguments(object):
     RESOURCE_FILE_NAME_MAP = {
+        "LOOMCD" : "DISK01.LEC",
         "MI1CD" : "MONKEY",
         "MI2" : "MONKEY2",
         "FOA" : "ATLANTIS"
     }
     SCUMM_VERSION_GAME_MAP = {
+        "LOOMCD" : "4",
         "MI1CD" : "5",
         "MI2" : "5",
         "FOA" : "5"
     }
     DEFAULT_SCUMM_VERSION_GAMES = {
+        "4" : "LOOMCD", # hm...
         "5" : "MI2"
     }
     DEFAULT_GAME_FOR_UNKNOWN_SCUMM_VERSION = "MI2"
@@ -193,14 +197,25 @@ class GlobalArguments(object):
             super(GlobalArguments, self).__setattr__(item, value)
 
     def parse_args(self):
-        options, _ = self.oparser.parse_args()
+        options, args = self.oparser.parse_args()
         # @type options Values
+        if len(args) > 0:
+            raise util.ScummPackerException("Invalid arguments specified, check your options.")
         self.unpack = options.unpack
         self.pack = options.pack
         self.scumm_version = options.scumm_version
         self.game = options.game
         self.input_file_name = options.input_file_name
         self.output_file_name = options.output_file_name
+
+    def set_args(self, **kwds):
+        """ Used for unit testing."""
+        super(GlobalArguments, self).__setattr__("unpack", kwds["unpack"])
+        super(GlobalArguments, self).__setattr__("pack", kwds["pack"])
+        super(GlobalArguments, self).__setattr__("scumm_version", kwds["scumm_version"])
+        super(GlobalArguments, self).__setattr__("game", kwds["game"])
+        super(GlobalArguments, self).__setattr__("input_file_name", kwds["input_file_name"])
+        super(GlobalArguments, self).__setattr__("output_file_name", kwds["output_file_name"])
 
     def print_help(self):
         self.oparser.print_help()
