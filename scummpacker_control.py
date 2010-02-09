@@ -220,26 +220,11 @@ class GlobalArguments(object):
     def print_help(self):
         self.oparser.print_help()
 
-global_index_map = IndexMappingContainer(
-    "ROOM",
-    "COST",
-    "CHAR",
-    "SCRP",
-    "SOUN",
-    "LFLF",
-    "RNAM"
-)
-
-unknown_blocks_counter = IndexCounter(
-    "ROOM",
-    "COST",
-    "CHAR",
-    "SCRP",
-    "SOUN",
-    "LFLF"
-)
 
 global_args = GlobalArguments()
 
+unknown_blocks_counter = IndexCounter()
+global_index_map = IndexMappingContainer()
+index_dispatcher = None
 block_dispatcher = None
 file_dispatcher = None

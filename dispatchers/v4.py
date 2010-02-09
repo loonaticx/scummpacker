@@ -4,6 +4,14 @@ import re
 import blocks
 from common import *
 
+INDEXED_BLOCKS_V4 = (
+    "RO", # rooms
+    "LF", # lf
+    "SC", # scripts
+    "CO", # cosutmes
+    "SO", # sounds
+)
+
 class BlockDispatcherV4(AbstractBlockDispatcher):
 
     CRYPT_VALUE = 0x69
@@ -12,18 +20,19 @@ class BlockDispatcherV4(AbstractBlockDispatcher):
        # Container blocks
         "LE" : blocks.BlockContainerV4, # main container (Lucasarts Entertainment)
         "LF" : blocks.BlockLFV4, # contains rooms and global resources
-#        "RO" : None, # room
+        "RO" : blocks.BlockContainerV4, # room
 #
 #        # Sound blocks
-#        "SO" : None, # sound, also container
+        "SO" : blocks.BlockSOV4, # sound, also container
 #        "WA" : None, # VOC (wave)
 #        "AD" : None, # adlib
 #
-#        # Globally indexed blocks
-#        "SC" : None, # scripts
-#
-#        # Other blocks that should not used default block functionality
-#        "FO" : None, # file (room) offsets
+        # Globally indexed blocks
+        "SC" : blocks.BlockGloballyIndexedV4, # scripts
+        "CO" : blocks.BlockGloballyIndexedV4, # costumes
+
+        # Other blocks that should not use default block functionality
+        "FO" : blocks.BlockFOV4, # file (room) offsets
 #        "HD" : None, # room header
 
     }

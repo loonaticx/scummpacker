@@ -244,3 +244,138 @@ class BlockContainer(AbstractBlock):
     def __repr__(self):
         childstr = [str(c) for c in self.children]
         return "[" + self.name + ", " + ", ".join(childstr) + "]"
+
+
+class BlockGloballyIndexed(AbstractBlock):
+    lf_name = "LFLF"
+    room_name = "ROOM"
+
+    def __init__(self, *args, **kwds):
+        super(BlockGloballyIndexed, self).__init__(*args, **kwds)
+        self.index = None
+        self.is_unknown = False
+
+    def load_from_resource(self, resource, room_start=0):
+        location = resource.tell()
+        super(BlockGloballyIndexed, self).load_from_resource(resource)
+        try:
+            room_num = control.global_index_map.get_index(self.lf_name, room_start)
+            room_offset = control.global_index_map.get_index(self.room_name, room_num) # HACK
+            self.index = control.global_index_map.get_index(self.name,
+                                                             (room_num, location - room_offset))
+        except util.ScummPackerUnrecognisedIndexException, suie:
+            logging.error("Block \""
+                       + str(self.name)
+                       + "\" at offset "
+                       + str(location)
+                       + " has no entry in the index file (.000). "
+                       + "It can not be re-packed or used in the game.")
+            self.is_unknown = True
+            self.index = control.unknown_blocks_counter.get_next_index(self.name)
+
+    def save_to_resource(self, resource, room_start=0):
+        # Look up the start of the current ROOM block, store
+        # a mapping of this block's index and room #/offset.
+        # Later on, our directories will just treat global_index_map as a list of
+        # tables and go through all of the values.
+        location = resource.tell()
+        #logging.debug("Saving globally indexed block: " + self.name)
+        #logging.debug("LFLF: " + str(control.global_index_map.items("LFLF")))
+        #logging.debug("ROOM: " + str(control.global_index_map.items("ROOM")))
+        room_num = control.global_index_map.get_index(self.lf_name, room_start)
+        room_offset = control.global_index_map.get_index(self.room_name, room_num)
+        control.global_index_map.map_index(self.name,
+                                           (room_num, location - room_offset),
+                                           self.index)
+        super(BlockGloballyIndexed, self).save_to_resource(resource, room_start)
+
+    def load_from_file(self, path):
+        """ Assumes we won't get any 'unknown' blocks, based on the regex in the file walker."""
+        if os.path.isdir(path):
+            index = os.path.split(path)[1][-3:]
+        else:
+            fname = os.path.split(path)[1]
+            index = os.path.splitext(fname)[0][-3:]
+        try:
+            self.index = int(index)
+        except ValueError, ve:
+            raise util.ScummPackerException(str(self.index) + " is an invalid index for resource " + path)
+        super(BlockGloballyIndexed, self).load_from_file(path)
+
+    def generate_file_name(self):
+        return (self.name
+                + "_"
+                + ("unk_" if self.is_unknown else "")
+                + str(self.index).zfill(3) + ".dmp")
+
+    def __repr__(self):
+        return "[" + self.name + ":" + ("unk_" if self.is_unknown else "") + str(self.index).zfill(3) + "]"
+
+class BlockLucasartsFile(BlockContainer, BlockGloballyIndexed):
+    """ Anything inheriting from this class should also inherit from the concrete versions
+    of BlockContainer and BlockGloballyIndexed."""
+    is_unknown = False
+
+    def load_from_resource(self, resource, room_start=0):
+        location = resource.tell()
+        self._read_header(resource, True)
+        self._read_data(resource, location, True)
+        try:
+            self.index = control.global_index_map.get_index(self.name, location)
+        except util.ScummPackerUnrecognisedIndexException, suie:
+            logging.error("Block \""
+                       + str(self.name)
+                       + "\" at offset "
+                       + str(location)
+                       + " has no entry in the index file (.000). "
+                       + "It can not be re-packed or used in the game without manually assigning an index.")
+            self.is_unknown = True
+            self.index = control.unknown_blocks_counter.get_next_index(self.name)
+
+    def save_to_resource(self, resource, room_start=0):
+        location = resource.tell()
+        room_start = location
+        control.global_index_map.map_index(self.name, location, self.index)
+        super(BlockLucasartsFile, self).save_to_resource(resource, room_start)
+
+    def save_to_file(self, path):
+        logging.info("Saving block "
+                         + self.name
+                         + ":"
+                         + ("unk_" if self.is_unknown else "")
+                         + str(self.index).zfill(3))
+        super(BlockLucasartsFile, self).save_to_file(path)
+
+    def load_from_file(self, path):
+        name = os.path.split(path)[1]
+        self.name = name.split('_')[0]
+        self.index = int(name.split('_')[1])
+        self.children = []
+
+        file_list = os.listdir(path)
+        if "order.xml" in file_list:
+            file_list.remove("order.xml")
+            self._load_order_from_xml(os.path.join(path, "order.xml"))
+
+        for f in file_list:
+            b = control.file_dispatcher.dispatch_next_block(f)
+            if b != None:
+                b.load_from_file(os.path.join(path, f))
+                self.append(b)
+
+    def generate_file_name(self):
+        return (self.name
+                + "_"
+                + ("unk_" if self.is_unknown else "")
+                + str(self.index).zfill(3))
+
+    def __repr__(self):
+        childstr = [str(c) for c in self.children]
+        return ("["
+                + self.name
+                + ":"
+                + ("unk_" if self.is_unknown else "")
+                + str(self.index).zfill(3)
+                + ", "
+                + ", ".join(childstr)
+                + "]")

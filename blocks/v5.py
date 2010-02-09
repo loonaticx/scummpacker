@@ -60,68 +60,9 @@ class BlockSoundV5(BlockDefaultV5):
     def generate_file_name(self):
         return self.name.rstrip()
 
-class BlockGloballyIndexedV5(BlockDefaultV5):
-    def __init__(self, *args, **kwds):
-        super(BlockGloballyIndexedV5, self).__init__(*args, **kwds)
-        self.index = None
-        self.is_unknown = False
-
-    def load_from_resource(self, resource, room_start=0):
-        location = resource.tell()
-        super(BlockGloballyIndexedV5, self).load_from_resource(resource)
-        try:
-            room_num = control.global_index_map.get_index("LFLF", room_start)
-            room_offset = control.global_index_map.get_index("ROOM", room_num) # HACK
-            self.index = control.global_index_map.get_index(self.name,
-                                                             (room_num, location - room_offset))
-        except util.ScummPackerUnrecognisedIndexException, suie:
-            logging.error("Block \""
-                       + str(self.name)
-                       + "\" at offset "
-                       + str(location)
-                       + " has no entry in the index file (.000). "
-                       + "It can not be re-packed or used in the game.")
-            self.is_unknown = True
-            self.index = control.unknown_blocks_counter.get_next_index(self.name)
-
-    def save_to_resource(self, resource, room_start=0):
-        # Look up the start of the current ROOM block, store
-        # a mapping of this block's index and room #/offset.
-        # Later on, our directories will just treat global_index_map as a list of
-        # tables and go through all of the values.
-        location = resource.tell()
-        #logging.debug("Saving globally indexed block: " + self.name)
-        #logging.debug("LFLF: " + str(control.global_index_map.items("LFLF")))
-        #logging.debug("ROOM: " + str(control.global_index_map.items("ROOM")))
-        room_num = control.global_index_map.get_index("LFLF", room_start)
-        room_offset = control.global_index_map.get_index("ROOM", room_num)
-        control.global_index_map.map_index(self.name,
-                                           (room_num, location - room_offset),
-                                           self.index)
-        super(BlockGloballyIndexedV5, self).save_to_resource(resource, room_start)
-
-    def load_from_file(self, path):
-        """ Assumes we won't get any 'unknown' blocks, based on the regex in the file walker."""
-        if os.path.isdir(path):
-            index = os.path.split(path)[1][-3:]
-        else:
-            fname = os.path.split(path)[1]
-            index = os.path.splitext(fname)[0][-3:]
-        try:
-            self.index = int(index)
-        except ValueError, ve:
-            raise util.ScummPackerException(str(self.index) + " is an invalid index for resource " + path)
-        super(BlockGloballyIndexedV5, self).load_from_file(path)
-
-    def generate_file_name(self):
-        return (self.name
-                + "_"
-                + ("unk_" if self.is_unknown else "")
-                + str(self.index).zfill(3) + ".dmp")
-
-    def __repr__(self):
-        return "[" + self.name + ":" + ("unk_" if self.is_unknown else "") + str(self.index).zfill(3) + "]"
-
+class BlockGloballyIndexedV5(BlockGloballyIndexed, BlockDefaultV5):
+    lf_name = "LFLF"
+    room_name = "ROOM"
 
 class BlockContainerV5(BlockContainer, BlockDefaultV5):
     block_ordering = [
@@ -1115,74 +1056,8 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
             return name
 
 
-class BlockLFLFV5(BlockContainerV5, BlockGloballyIndexedV5):
+class BlockLFLFV5(BlockLucasartsFile, BlockContainerV5, BlockGloballyIndexedV5):
     name = "LFLF"
-
-    def load_from_resource(self, resource, room_start=0):
-        location = resource.tell()
-        self._read_header(resource, True)
-        self._read_data(resource, location, True)
-        try:
-            self.index = control.global_index_map.get_index(self.name, location)
-        except util.ScummPackerUnrecognisedIndexException, suie:
-            logging.error("Block \""
-                       + str(self.name)
-                       + "\" at offset "
-                       + str(location)
-                       + " has no entry in the index file (.000). "
-                       + "It can not be re-packed or used in the game without manually assigning an index.")
-            self.is_unknown = True
-            self.index = control.unknown_blocks_counter.get_next_index(self.name)
-
-    def save_to_resource(self, resource, room_start=0):
-        location = resource.tell()
-        room_start = location
-        control.global_index_map.map_index(self.name, location, self.index)
-        super(BlockLFLFV5, self).save_to_resource(resource, room_start)
-
-    def save_to_file(self, path):
-        logging.info("Saving block "
-                         + self.name
-                         + ":"
-                         + ("unk_" if self.is_unknown else "")
-                         + str(self.index).zfill(3))
-        super(BlockLFLFV5, self).save_to_file(path)
-
-    def load_from_file(self, path):
-        name = os.path.split(path)[1]
-        self.name = name.split('_')[0]
-        self.index = int(name.split('_')[1])
-        self.children = []
-
-        file_list = os.listdir(path)
-        if "order.xml" in file_list:
-            file_list.remove("order.xml")
-            self._load_order_from_xml(os.path.join(path, "order.xml"))
-
-        for f in file_list:
-            b = control.file_dispatcher.dispatch_next_block(f)
-            if b != None:
-                b.load_from_file(os.path.join(path, f))
-                self.append(b)
-
-
-    def generate_file_name(self):
-        return (self.name
-                + "_"
-                + ("unk_" if self.is_unknown else "")
-                + str(self.index).zfill(3))
-
-    def __repr__(self):
-        childstr = [str(c) for c in self.children]
-        return ("["
-                + self.name
-                + ":"
-                + ("unk_" if self.is_unknown else "")
-                + str(self.index).zfill(3)
-                + ", "
-                + ", ".join(childstr)
-                + "]")
-
 
 class BlockLECFV5(BlockContainerV5):
     name = "LECF"
@@ -1538,6 +1413,8 @@ def __test_unpack():
     import dispatchers
     control.global_args.set_args(unpack=True, pack=False, scumm_version="5",
         game="MI2", input_file_name="MONKEY2.000", output_file_name="D:\\TEMP")
+    control.unknown_blocks_counter = control.IndexCounter(*dispatchers.INDEXED_BLOCKS_V5)
+    control.global_index_map = control.IndexMappingContainer(*dispatchers.INDEXED_BLOCKS_V5)
 
     outpath = "D:\\TEMP"
 
@@ -1556,26 +1433,13 @@ def __test_unpack():
 
     block.save_to_file(outpath)
 
-def __test_unpack_from_file():
-
-    outpath = "D:\\TEMP"
-
-    inpath = os.path.join(outpath, "LECF")
-    block = BlockLECFV5(4, 0x69)
-    block.load_from_file(inpath)
-
-    logging.info("read from file, now saving to file")
-
-    outpath = os.path.join(outpath, "outtest")
-    if not os.path.isdir(outpath):
-        os.mkdir(outpath)
-    block.save_to_file(outpath)
-
 def __test_pack():
     import dispatchers
     control.global_args.set_args(unpack=False, pack=True, scumm_version="5",
         game="MI2", input_file_name="D:\\TEMP", output_file_name="D:\\TEMP\\outres.000")
     control.file_dispatcher = dispatchers.FileDispatcherV5()
+    control.unknown_blocks_counter = control.IndexCounter(*dispatchers.INDEXED_BLOCKS_V5)
+    control.global_index_map = control.IndexMappingContainer(*dispatchers.INDEXED_BLOCKS_V5)
 
     startpath = "D:\\TEMP"
 
@@ -1596,7 +1460,6 @@ def __test_pack():
 
 def __test():
     __test_unpack()
-    #__test_unpack_from_file()
     __test_pack()
 
 # TODO: better integration test dispatching

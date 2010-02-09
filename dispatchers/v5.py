@@ -5,6 +5,16 @@ import re
 import blocks
 from common import *
 
+INDEXED_BLOCKS_V5 = (
+    "ROOM",
+    "COST",
+    "CHAR",
+    "SCRP",
+    "SOUN",
+    "LFLF",
+    "RNAM"
+)
+
 class BlockDispatcherV5(AbstractBlockDispatcher):
 
     CRYPT_VALUE = 0x69
