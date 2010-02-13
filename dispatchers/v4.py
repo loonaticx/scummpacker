@@ -33,6 +33,7 @@ class BlockDispatcherV4(AbstractBlockDispatcher):
 
         # Other blocks that should not use default block functionality
         "FO" : blocks.BlockFOV4, # file (room) offsets
+        "LS" : blocks.BlockLSV4, # local scripts
 #        "HD" : None, # room header
 
     }

@@ -151,8 +151,16 @@ class BlockLFV4(BlockLucasartsFile, BlockContainerV4, BlockGloballyIndexedV4):
         self.index = util.str_to_int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
         super(BlockLFV4, self)._read_data(resource, start, decrypt)
 
+class BlockLSV4(BlockLocalScript, BlockDefaultV4):
+    name = "LS"
+
 class BlockSOV4(BlockContainerV4, BlockGloballyIndexedV4):
-    pass
+    def generate_file_name(self):
+        name = (self.name
+                + "_"
+                + ("unk_" if self.is_unknown else "")
+                + str(self.index).zfill(3))
+        return name
 
 def __test_unpack():
     import dispatchers

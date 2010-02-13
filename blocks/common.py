@@ -247,8 +247,8 @@ class BlockContainer(AbstractBlock):
 
 
 class BlockGloballyIndexed(AbstractBlock):
-    lf_name = "LFLF"
-    room_name = "ROOM"
+    lf_name = NONE # override in concrete class
+    room_name = NONE # override in concrete class
 
     def __init__(self, *args, **kwds):
         super(BlockGloballyIndexed, self).__init__(*args, **kwds)
@@ -310,6 +310,26 @@ class BlockGloballyIndexed(AbstractBlock):
 
     def __repr__(self):
         return "[" + self.name + ":" + ("unk_" if self.is_unknown else "") + str(self.index).zfill(3) + "]"
+
+class BlockLocalScript(AbstractBlock):
+    name = None # override in concrete class
+
+    def _read_data(self, resource, start, decrypt):
+        script_id = resource.read(1)
+        if decrypt:
+            script_id = util.crypt(script_id, self.crypt_value)
+        self.script_id = util.str_to_int(script_id)
+        self.data = self._read_raw_data(resource, self.size - (resource.tell() - start), decrypt)
+
+    def _write_data(self, outfile, encrypt):
+        script_num = util.int_to_str(self.script_id, num_bytes=1)
+        if encrypt:
+            script_num = util.crypt(script_num, self.crypt_value)
+        outfile.write(script_num)
+        self._write_raw_data(outfile, encrypt)
+
+    def generate_file_name(self):
+        return self.name + "_" + str(self.script_id).zfill(3) + ".dmp"
 
 class BlockLucasartsFile(BlockContainer, BlockGloballyIndexed):
     """ Anything inheriting from this class should also inherit from the concrete versions
@@ -379,3 +399,4 @@ class BlockLucasartsFile(BlockContainer, BlockGloballyIndexed):
                 + ", "
                 + ", ".join(childstr)
                 + "]")
+

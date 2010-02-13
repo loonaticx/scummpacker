@@ -424,26 +424,8 @@ class ScriptBlockContainer(object):
         childstr.extend([str(c) for c in self.local_scripts])
         return "[Scripts, " + ", ".join(childstr) + "]"
 
-class BlockLSCRV5(BlockDefaultV5):
+class BlockLSCRV5(BlockLocalScript, BlockDefaultV5):
     name = "LSCR"
-
-    def _read_data(self, resource, start, decrypt):
-        script_id = resource.read(1)
-        if decrypt:
-            script_id = util.crypt(script_id, self.crypt_value)
-        self.script_id = util.str_to_int(script_id)
-        self.data = self._read_raw_data(resource, self.size - (resource.tell() - start), decrypt)
-
-    def _write_data(self, outfile, encrypt):
-        script_num = util.int_to_str(self.script_id, num_bytes=1)
-        if encrypt:
-            script_num = util.crypt(script_num, self.crypt_value)
-        outfile.write(script_num)
-        self._write_raw_data(outfile, encrypt)
-
-    def generate_file_name(self):
-        return self.name + "_" + str(self.script_id).zfill(3) + ".dmp"
-
 
 class ObjectBlockContainer(object):
     OBJ_ID_LENGTH = 4
