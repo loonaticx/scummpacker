@@ -1,6 +1,6 @@
 #! /usr/bin/python
 import os
-import re
+#import re
 import blocks
 from common import *
 
@@ -20,7 +20,7 @@ class BlockDispatcherV4(AbstractBlockDispatcher):
        # Container blocks
         "LE" : blocks.BlockContainerV4, # main container (Lucasarts Entertainment)
         "LF" : blocks.BlockLFV4, # contains rooms and global resources
-        "RO" : blocks.BlockContainerV4, # room
+        "RO" : blocks.BlockROV4, # room
 #
 #        # Sound blocks
         "SO" : blocks.BlockSOV4, # sound, also container

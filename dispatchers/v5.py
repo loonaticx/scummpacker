@@ -81,7 +81,7 @@ class FileDispatcherV5(AbstractFileDispatcher):
         r"RMHD.xml" : blocks.BlockRMHDV5,
         r"RMIM" : blocks.BlockContainerV5,
         r"objects" : blocks.ObjectBlockContainer,
-        r"scripts" : blocks.ScriptBlockContainer,
+        r"scripts" : blocks.ScriptBlockContainerV5,
         # ---RMIM
         r"RMIH.xml" : blocks.BlockRMIHV5,
         # ---objects (incl. subdirs)

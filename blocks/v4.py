@@ -58,6 +58,7 @@ class BlockContainerV4(BlockContainer, BlockDefaultV4):
          "EN", # entry code
          "LC", # number of local scripts
          "LS", # local script
+        "scripts",
         # Inside LF again
         "SC", # script
         "SO", # sound
@@ -66,7 +67,8 @@ class BlockContainerV4(BlockContainer, BlockDefaultV4):
          "AD", # adlib
         "CO", # costume
     ]
-    
+
+    # Anyone know what this junk data is?
     junk_locations = {
         63314 : 24, # Loom CD
         3601305 : 24, # Loom CD
@@ -154,6 +156,22 @@ class BlockLFV4(BlockLucasartsFile, BlockContainerV4, BlockGloballyIndexedV4):
 class BlockLSV4(BlockLocalScript, BlockDefaultV4):
     name = "LS"
 
+class BlockROV4(BlockRoom, BlockContainerV4): # also globally indexed
+    def _init_class_data(self):
+        self.name = "RO"
+        self.lf_name = "LF"
+        self.script_types = frozenset(["EN",
+                                  "EX",
+                                  "LS"])
+        self.object_types = frozenset(["OI",
+                                  "OC"])
+        self.object_image_type = "OI"
+        self.object_code_type = "OC"
+        self.num_scripts_type = "NL"
+        self.script_container_class = ScriptBlockContainerV4
+        #self.object_container_class = ObjectBlockContainerV4
+        self.object_container_class = None
+
 class BlockSOV4(BlockContainerV4, BlockGloballyIndexedV4):
     def generate_file_name(self):
         name = (self.name
@@ -161,6 +179,13 @@ class BlockSOV4(BlockContainerV4, BlockGloballyIndexedV4):
                 + ("unk_" if self.is_unknown else "")
                 + str(self.index).zfill(3))
         return name
+
+class ScriptBlockContainerV4(ScriptBlockContainer):
+    local_scripts_name = "LS"
+    entry_script_name = "EN"
+    exit_script_name = "EX"
+    lf_name = "LF"
+    num_local_name = "NL"
 
 def __test_unpack():
     import dispatchers

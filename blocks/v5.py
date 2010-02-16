@@ -277,7 +277,7 @@ class BlockROOMV5(BlockContainerV5): # also globally indexed
     def _read_data(self, resource, start, decrypt):
         end = start + self.size
         object_container = ObjectBlockContainer(self.block_name_length, self.crypt_value)
-        script_container = ScriptBlockContainer(self.block_name_length, self.crypt_value)
+        script_container = ScriptBlockContainerV5(self.block_name_length, self.crypt_value)
         while resource.tell() < end:
             block = control.block_dispatcher.dispatch_next_block(resource)
             block.load_from_resource(resource)
@@ -355,74 +355,12 @@ class BlockLOFFV5(BlockDefaultV5):
         block_end = resource.tell()
         self.size = block_end - block_start
 
-class ScriptBlockContainer(object):
-    script_types = frozenset(["ENCD", "EXCD", "LSCR"])
-
-    def __init__(self, block_name_length, crypt_value, *args, **kwds):
-        self.local_scripts = []
-        self.encd_script = None
-        self.excd_script = None
-        self.block_name_length = block_name_length
-        self.crypt_value = crypt_value
-        self.name = "scripts"
-
-    def append(self, block):
-        # Would be nice to compare them using self.script_types or similar...
-        if block.name == "LSCR":
-            self.local_scripts.append(block)
-        elif block.name == "ENCD":
-            self.encd_script = block
-        elif block.name == "EXCD":
-            self.excd_script = block
-        else:
-            raise util.ScummPackerException("Unrecognised script type: " + str(block.name))
-
-    def save_to_file(self, path):
-        newpath = os.path.join(path, self.generate_file_name())
-        if not os.path.isdir(newpath):
-            os.mkdir(newpath) # throws an exception if can't create dir
-        if self.encd_script:
-            self.encd_script.save_to_file(newpath)
-        if self.excd_script:
-            self.excd_script.save_to_file(newpath)
-        for s in self.local_scripts:
-            s.save_to_file(newpath)
-
-    def save_to_resource(self, resource, room_start=0):
-        # Determine the number of local scripts (LSCR)
-        num_local_scripts = len(self.local_scripts)
-        # Write ENCD, EXCD blocks (seperate from LSCRs)
-        if not self.encd_script or not self.excd_script:
-            room_num = control.global_index_map.get_index("LFLF", room_start)
-            raise util.ScummPackerException(
-                "Room #" + str(room_num) + " appears to be missing either a room entry or exit script (or both).")
-        self.excd_script.save_to_resource(resource, room_start)
-        self.encd_script.save_to_resource(resource, room_start)
-        # Generate and write NLSC block (could be prettier, should have its own class)
-        resource.write(util.crypt("NLSC", self.crypt_value))
-        resource.write(util.int_to_str(10, 4, util.BE, self.crypt_value)) # size of this block is always 10
-        resource.write(util.int_to_str(num_local_scripts, 2, util.LE, self.crypt_value))
-        # Write all LSCRs sorted by script number
-        self.local_scripts.sort(cmp=lambda x,y: cmp(x.script_id, y.script_id))
-        for s in self.local_scripts:
-            s.save_to_resource(resource, room_start)
-
-    def load_from_file(self, path):
-        file_list = os.listdir(path)
-
-        for f in file_list:
-            b = control.file_dispatcher.dispatch_next_block(f)
-            if b != None: #and self.script_types: #TODO: only load recognised scripts
-                b.load_from_file(os.path.join(path, f))
-                self.append(b)
-
-    def generate_file_name(self):
-        return "scripts"
-
-    def __repr__(self):
-        childstr = [str(self.encd_script), str(self.excd_script)]
-        childstr.extend([str(c) for c in self.local_scripts])
-        return "[Scripts, " + ", ".join(childstr) + "]"
+class ScriptBlockContainerV5(ScriptBlockContainer):
+    local_scripts_name = "LSCR"
+    entry_script_name = "ENCD"
+    exit_script_name = "EXCD"
+    lf_name = "LFLF"
+    num_local_name = "NLSC"
 
 class BlockLSCRV5(BlockLocalScript, BlockDefaultV5):
     name = "LSCR"
