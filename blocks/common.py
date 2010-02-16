@@ -247,8 +247,8 @@ class BlockContainer(AbstractBlock):
 
 
 class BlockGloballyIndexed(AbstractBlock):
-    lf_name = NONE # override in concrete class
-    room_name = NONE # override in concrete class
+    lf_name = None # override in concrete class
+    room_name = None # override in concrete class
 
     def __init__(self, *args, **kwds):
         super(BlockGloballyIndexed, self).__init__(*args, **kwds)
