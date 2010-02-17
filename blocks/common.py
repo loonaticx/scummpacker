@@ -481,20 +481,20 @@ class ScriptBlockContainer(object):
             s.save_to_file(newpath)
 
     def save_to_resource(self, resource, room_start=0):
-        # Determine the number of local scripts (LSCR)
+        # Determine the number of local scripts
         num_local_scripts = len(self.local_scripts)
-        # Write ENCD, EXCD blocks (seperate from LSCRs)
+        # Write entry and exit scripts (seperate from local scripts)
         if not self.encd_script or not self.excd_script:
             room_num = control.global_index_map.get_index(self.lf_name, room_start)
             raise util.ScummPackerException(
                 "Room #" + str(room_num) + " appears to be missing either a room entry or exit script (or both).")
         self.excd_script.save_to_resource(resource, room_start)
         self.encd_script.save_to_resource(resource, room_start)
-        # Generate and write NLSC block (could be prettier, should have its own class)
+        # Generate and write "number of local scripts" block (could be prettier, should have its own class)
         resource.write(util.crypt(self.num_local_name, self.crypt_value))
         resource.write(util.int_to_str(10, 4, util.BE, self.crypt_value)) # size of this block is always 10
         resource.write(util.int_to_str(num_local_scripts, 2, util.LE, self.crypt_value))
-        # Write all LSCRs sorted by script number
+        # Write all local scripts sorted by script number
         self.local_scripts.sort(cmp=lambda x,y: cmp(x.script_id, y.script_id))
         for s in self.local_scripts:
             s.save_to_resource(resource, room_start)
