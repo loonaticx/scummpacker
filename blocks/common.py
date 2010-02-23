@@ -415,6 +415,7 @@ class BlockRoom(BlockContainer): # also globally indexed
         self.num_scripts_type = None
         self.script_container_class = ScriptBlockContainer
         self.object_container_class = ObjectBlockContainer
+        raise NotImplementedError("This method must be overriden by a concrete class.")
 
     def _read_data(self, resource, start, decrypt):
         end = start + self.size
@@ -443,6 +444,162 @@ class BlockRoom(BlockContainer): # also globally indexed
         room_num = control.global_index_map.get_index(self.lf_name, room_start)
         control.global_index_map.map_index(self.lf_name, room_num, location)
         super(BlockRoom, self).save_to_resource(resource, room_start)
+
+class ObjectBlockContainer(object):
+
+    """ Contains objects, which contain image and code blocks."""
+    def __init__(self, block_name_length, crypt_value, *args, **kwds):
+        self.objects = {}
+        self.block_name_length = block_name_length
+        self.crypt_value = crypt_value
+        self.name = "objects"
+        self.order_map = { self.obcd_name : [], self.obim_name : [] }
+        self._init_class_data()
+
+    def _init_class_data(self):
+        self.obj_id_length = 4
+        self.obcd_name = "OBCD"
+        self.obim_name = "OBIM"
+        raise NotImplementedError("This method must be overriden by a concrete class.")
+
+    def add_code_block(self, block):
+        if not block.obj_id in self.objects:
+            self.objects[block.obj_id] = [None, None] # pos1 = image, pos2 = code
+        self.objects[block.obj_id][1] = block
+        self.order_map[self.obcd_name].append(block.obj_id)
+
+    def add_image_block(self, block):
+        if not block.obj_id in self.objects:
+            self.objects[block.obj_id] = [None, None] # pos1 = image, pos2 = code
+        self.objects[block.obj_id][0] = block
+        self.order_map[self.obim_name].append(block.obj_id)
+
+    def save_to_file(self, path):
+        objects_path = os.path.join(path, self.generate_file_name())
+        if not os.path.isdir(objects_path):
+            os.mkdir(objects_path) # throws an exception if can't create dir
+        for objimage, objcode in self.objects.values():
+            # New path name = Object ID + object name (removing trailing spaces)
+            obj_path_name = str(objcode.obj_id).zfill(self.obj_id_length) + "_" + util.discard_invalid_chars(objcode.obj_name).rstrip()
+            #logging.debug("Writing object: %s" % obj_path_name)
+            newpath = os.path.join(objects_path, obj_path_name)
+            if not os.path.isdir(newpath):
+                os.mkdir(newpath) # throws an exception if can't create dir
+            objimage.save_to_file(newpath)
+            objcode.save_to_file(newpath)
+            self._save_header_to_xml(newpath, objimage, objcode)
+        self._save_order_to_xml(objects_path)
+
+    def save_to_resource(self, resource, room_start=0):
+        object_keys = self.objects.keys()
+        # Write all image blocks first
+        object_keys = util.ordered_sort(object_keys, self.order_map[obim_name])
+        for obj_id in object_keys:
+            #logging.debug("Writing object image: " + str(obj_id))
+            self.objects[obj_id][0].save_to_resource(resource, room_start)
+
+        # Then write all object code/names
+        object_keys = util.ordered_sort(object_keys, self.order_map[self.obcd_name])
+        for obj_id in object_keys:
+            #logging.debug("Writing object code: " + str(objcode.obj_id))
+            self.objects[obj_id][1].save_to_resource(resource, room_start)
+
+    def _save_header_to_xml(self, path, objimage, objcode):
+        # Save the joined header information as XML
+        root = et.Element("object")
+
+        #shared = et.SubElement(root, "shared")
+        et.SubElement(root, "name").text = util.escape_invalid_chars(objcode.obj_name)
+        et.SubElement(root, "id").text = util.output_int_to_xml(objcode.obj_id)
+
+        # OBIM
+        obim = et.SubElement(root, "image")
+        et.SubElement(obim, "x").text = util.output_int_to_xml(objimage.imhd.x)
+        et.SubElement(obim, "y").text = util.output_int_to_xml(objimage.imhd.y)
+        et.SubElement(obim, "width").text = util.output_int_to_xml(objimage.imhd.width)
+        et.SubElement(obim, "height").text = util.output_int_to_xml(objimage.imhd.height)
+        et.SubElement(obim, "flags").text = util.output_int_to_xml(objimage.imhd.flags, util.HEX)
+        et.SubElement(obim, "unknown").text = util.output_int_to_xml(objimage.imhd.unknown, util.HEX)
+        et.SubElement(obim, "num_images").text = util.output_int_to_xml(objimage.imhd.num_imnn)
+        et.SubElement(obim, "num_zplanes").text = util.output_int_to_xml(objimage.imhd.num_zpnn)
+
+        # OBCD
+        obcd = et.SubElement(root, "code")
+        et.SubElement(obcd, "x").text = util.output_int_to_xml(objcode.cdhd.x)
+        et.SubElement(obcd, "y").text = util.output_int_to_xml(objcode.cdhd.y)
+        et.SubElement(obcd, "width").text = util.output_int_to_xml(objcode.cdhd.width)
+        et.SubElement(obcd, "height").text = util.output_int_to_xml(objcode.cdhd.height)
+        et.SubElement(obcd, "flags").text = util.output_int_to_xml(objcode.cdhd.flags, util.HEX)
+        et.SubElement(obcd, "parent").text = util.output_int_to_xml(objcode.cdhd.parent)
+        et.SubElement(obcd, "walk_x").text = util.output_int_to_xml(objcode.cdhd.walk_x)
+        et.SubElement(obcd, "walk_y").text = util.output_int_to_xml(objcode.cdhd.walk_y)
+        et.SubElement(obcd, "actor_dir").text = util.output_int_to_xml(objcode.cdhd.actor_dir)
+
+        util.indent_elementtree(root)
+        et.ElementTree(root).write(os.path.join(path, "OBHD.xml"))
+
+    def _save_order_to_xml(self, path):
+        root = et.Element("order")
+
+        for block_type, order_list in self.order_map.items():
+            order_list_node = et.SubElement(root, "order-list")
+            order_list_node.set("block-type", block_type)
+            for o in order_list:
+                et.SubElement(order_list_node, "order-entry").text = util.output_int_to_xml(o)
+
+        util.indent_elementtree(root)
+        et.ElementTree(root).write(os.path.join(path, "order.xml"))
+
+    def load_from_file(self, path):
+        file_list = os.listdir(path)
+
+        re_pattern = re.compile(r"[0-9]{" + str(self.obj_id_length) + r"}_.*")
+        object_dirs = [f for f in file_list if re_pattern.match(f) != None]
+        self.order_map = { self.obcd_name : [], self.obim_name : [] }
+        for od in object_dirs:
+            new_path = os.path.join(path, od)
+
+            objimage = BlockOBIMV5(self.block_name_length, self.crypt_value)
+            objimage.load_from_file(new_path)
+            self.add_image_block(objimage)
+
+            objcode = BlockOBCDV5(self.block_name_length, self.crypt_value)
+            objcode.load_from_file(new_path)
+            self.add_code_block(objcode)
+
+        self._load_order_from_xml(path)
+
+    def _load_order_from_xml(self, path):
+        order_fname = os.path.join(path, "order.xml")
+        if not os.path.isfile(order_fname):
+            # If order.xml does not exist, use whatever order we want.
+            return
+
+        tree = et.parse(order_fname)
+        root = tree.getroot()
+
+        loaded_order_map = self.order_map
+        self.order_map = { self.obcd_name : [], self.obim_name : [] }
+
+        for order_list in root.findall("order-list"):
+            block_type = order_list.get("block-type")
+
+            for o in order_list.findall("order-entry"):
+                if not block_type in self.order_map:
+                    self.order_map[block_type] = []
+                self.order_map[block_type].append(util.parse_int_from_xml(o.text))
+
+            # Retain order of items loaded but not present in order.xml
+            if block_type in loaded_order_map:
+                extra_orders = [i for i in loaded_order_map[block_type] if not i in self.order_map[block_type]]
+                self.order_map[block_type].extend(extra_orders)
+
+    def generate_file_name(self):
+        return "objects"
+
+    def __repr__(self):
+        childstr = ["obj_" + str(c) for c in self.objects.keys()]
+        return "[" + self.obim_name + " & " + self.obcd_name + ", " + "[" + ", ".join(childstr) + "] " + "]"
 
 class ScriptBlockContainer(object):
     local_scripts_name = None

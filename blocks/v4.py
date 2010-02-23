@@ -7,6 +7,9 @@ import scummpacker_control as control
 #import scummpacker_util as util
 from common import *
 
+#--------------------
+# Parent block classes
+
 class BlockDefaultV4(AbstractBlock):
     def _read_header(self, resource, decrypt):
         # Should be reversed for old format resources
@@ -86,6 +89,87 @@ class BlockContainerV4(BlockContainer, BlockDefaultV4):
             block = control.block_dispatcher.dispatch_next_block(resource)
             block.load_from_resource(resource, start)
             self.append(block)
+
+#--------------------
+# Concrete Blocks
+
+class BlockOCV4(BlockDefaultV4):
+    name = "OC"
+
+    def _read_data(self, resource, start, decrypt):
+        """
+          obj id    : 16le
+          unknown   : 8
+          x         : 8
+          y, parent state : 8 (parent state is the high bit, y is ANDed 0x7F)
+          width     : 8
+          parent    : 8
+          walk_x    : 16le signed
+          walk_y    : 16le signed
+          height and actor_dir : 8 ( actor_dir is ANDed 0x07, heigh ANDed 0xF8)
+          name_offset : 8 (offset from start of the file)
+          verb table : variable
+          obj_name  : variable, null-terminated
+        """
+        data = resource.read(13)
+        if decrypt:
+            data = util.crypt(data, self.crypt_value)
+        values = struct.unpack("<H5B2h2B", data)
+        del data
+
+        # Unpack the values
+        self.obj_id, self.unknown, self.x, y_and_parent_state, self.width, \
+        self.parent, self.walk_x, self.walk_y, height_and_actor_dir, name_offset = values
+        del values
+
+        self.parent_state = y_and_parent_state & 0x80
+        self.y = y_and_parent_state & 0x7F
+        self.height = height_and_actor_dir & 0xF8
+        self.actor_dir = height_and_actor_dir & 0x07
+
+        # Read object name (null-terminated string)
+        resource.seek(name_offset, os.SEEK_SET)
+        self.obj_name = ''
+        while True:
+            c = resource.read(1)
+            if c == "\x00":
+                break
+            self.obj_name += c
+
+    # TODO: all method below
+    def load_from_file(self, path):
+        self.name = "CDHD"
+        self.size = 13 + 8 # data + header
+        self._load_header_from_xml(path)
+
+    def _load_header_from_xml(self, path):
+        tree = et.parse(path)
+        root = tree.getroot()
+
+        # Shared
+        obj_id = int(root.find("id").text)
+        self.obj_id = obj_id
+
+        # OBCD
+        obcd_node = root.find("code")
+        self.x = util.parse_int_from_xml(obcd_node.find("x").text)
+        self.y = util.parse_int_from_xml(obcd_node.find("y").text)
+        self.width = util.parse_int_from_xml(obcd_node.find("width").text)
+        self.height = util.parse_int_from_xml(obcd_node.find("height").text)
+
+        self.flags = util.parse_int_from_xml(obcd_node.find("flags").text)
+        self.parent = util.parse_int_from_xml(obcd_node.find("parent").text)
+        self.walk_x = util.parse_int_from_xml(obcd_node.find("walk_x").text)
+        self.walk_y = util.parse_int_from_xml(obcd_node.find("walk_y").text)
+        self.actor_dir = util.parse_int_from_xml(obcd_node.find("actor_dir").text)
+
+    def _write_data(self, outfile, encrypt):
+        """ Assumes it's writing to a resource."""
+        data = struct.pack("<H6B2hB", self.obj_id, self.x, self.y, self.width, self.height, self.flags,
+            self.parent, self.walk_x, self.walk_y, self.actor_dir)
+        if encrypt:
+            data = util.crypt(data, self.crypt_value)
+        outfile.write(data)
 
 class BlockFOV4(BlockDefaultV4):
     name = "FO"
