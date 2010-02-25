@@ -276,7 +276,7 @@ class BlockROOMV5(BlockContainerV5): # also globally indexed
 
     def _read_data(self, resource, start, decrypt):
         end = start + self.size
-        object_container = ObjectBlockContainer(self.block_name_length, self.crypt_value)
+        object_container = ObjectBlockContainerV5(self.block_name_length, self.crypt_value)
         script_container = ScriptBlockContainerV5(self.block_name_length, self.crypt_value)
         while resource.tell() < end:
             block = control.block_dispatcher.dispatch_next_block(resource)
@@ -365,156 +365,12 @@ class ScriptBlockContainerV5(ScriptBlockContainer):
 class BlockLSCRV5(BlockLocalScript, BlockDefaultV5):
     name = "LSCR"
 
-class ObjectBlockContainer(object):
-    OBJ_ID_LENGTH = 4
-
-    """ Contains objects, which contain image and code blocks."""
-    def __init__(self, block_name_length, crypt_value, *args, **kwds):
-        self.objects = {}
-        self.block_name_length = block_name_length
-        self.crypt_value = crypt_value
-        self.name = "objects"
-        self.order_map = { "OBCD" : [], "OBIM" : [] }
-
-    def add_code_block(self, block):
-        if not block.obj_id in self.objects:
-            self.objects[block.obj_id] = [None, None] # pos1 = image, pos2 = code
-        self.objects[block.obj_id][1] = block
-        self.order_map["OBCD"].append(block.obj_id)
-
-    def add_image_block(self, block):
-        if not block.obj_id in self.objects:
-            self.objects[block.obj_id] = [None, None] # pos1 = image, pos2 = code
-        self.objects[block.obj_id][0] = block
-        self.order_map["OBIM"].append(block.obj_id)
-
-    def save_to_file(self, path):
-        objects_path = os.path.join(path, self.generate_file_name())
-        if not os.path.isdir(objects_path):
-            os.mkdir(objects_path) # throws an exception if can't create dir
-        for objimage, objcode in self.objects.values():
-            # New path name = Object ID + object name (removing trailing spaces)
-            obj_path_name = str(objcode.obj_id).zfill(self.OBJ_ID_LENGTH) + "_" + util.discard_invalid_chars(objcode.obj_name).rstrip()
-            #logging.debug("Writing object: %s" % obj_path_name)
-            newpath = os.path.join(objects_path, obj_path_name)
-            if not os.path.isdir(newpath):
-                os.mkdir(newpath) # throws an exception if can't create dir
-            objimage.save_to_file(newpath)
-            objcode.save_to_file(newpath)
-            self._save_header_to_xml(newpath, objimage, objcode)
-        self._save_order_to_xml(objects_path)
-
-    def save_to_resource(self, resource, room_start=0):
-        object_keys = self.objects.keys()
-        # Write all image blocks first
-        object_keys = util.ordered_sort(object_keys, self.order_map["OBIM"])
-        for obj_id in object_keys:
-            #logging.debug("Writing object image: " + str(obj_id))
-            self.objects[obj_id][0].save_to_resource(resource, room_start)
-
-        # Then write all object code/names
-        object_keys = util.ordered_sort(object_keys, self.order_map["OBCD"])
-        for obj_id in object_keys:
-            #logging.debug("Writing object code: " + str(objcode.obj_id))
-            self.objects[obj_id][1].save_to_resource(resource, room_start)
-
-    def _save_header_to_xml(self, path, objimage, objcode):
-        # Save the joined header information as XML
-        root = et.Element("object")
-
-        #shared = et.SubElement(root, "shared")
-        et.SubElement(root, "name").text = util.escape_invalid_chars(objcode.obj_name)
-        et.SubElement(root, "id").text = util.output_int_to_xml(objcode.obj_id)
-
-        # OBIM
-        obim = et.SubElement(root, "image")
-        et.SubElement(obim, "x").text = util.output_int_to_xml(objimage.imhd.x)
-        et.SubElement(obim, "y").text = util.output_int_to_xml(objimage.imhd.y)
-        et.SubElement(obim, "width").text = util.output_int_to_xml(objimage.imhd.width)
-        et.SubElement(obim, "height").text = util.output_int_to_xml(objimage.imhd.height)
-        et.SubElement(obim, "flags").text = util.output_int_to_xml(objimage.imhd.flags, util.HEX)
-        et.SubElement(obim, "unknown").text = util.output_int_to_xml(objimage.imhd.unknown, util.HEX)
-        et.SubElement(obim, "num_images").text = util.output_int_to_xml(objimage.imhd.num_imnn)
-        et.SubElement(obim, "num_zplanes").text = util.output_int_to_xml(objimage.imhd.num_zpnn)
-
-        # OBCD
-        obcd = et.SubElement(root, "code")
-        et.SubElement(obcd, "x").text = util.output_int_to_xml(objcode.cdhd.x)
-        et.SubElement(obcd, "y").text = util.output_int_to_xml(objcode.cdhd.y)
-        et.SubElement(obcd, "width").text = util.output_int_to_xml(objcode.cdhd.width)
-        et.SubElement(obcd, "height").text = util.output_int_to_xml(objcode.cdhd.height)
-        et.SubElement(obcd, "flags").text = util.output_int_to_xml(objcode.cdhd.flags, util.HEX)
-        et.SubElement(obcd, "parent").text = util.output_int_to_xml(objcode.cdhd.parent)
-        et.SubElement(obcd, "walk_x").text = util.output_int_to_xml(objcode.cdhd.walk_x)
-        et.SubElement(obcd, "walk_y").text = util.output_int_to_xml(objcode.cdhd.walk_y)
-        et.SubElement(obcd, "actor_dir").text = util.output_int_to_xml(objcode.cdhd.actor_dir)
-
-        util.indent_elementtree(root)
-        et.ElementTree(root).write(os.path.join(path, "OBHD.xml"))
-
-    def _save_order_to_xml(self, path):
-        root = et.Element("order")
-
-        for block_type, order_list in self.order_map.items():
-            order_list_node = et.SubElement(root, "order-list")
-            order_list_node.set("block-type", block_type)
-            for o in order_list:
-                et.SubElement(order_list_node, "order-entry").text = util.output_int_to_xml(o)
-
-        util.indent_elementtree(root)
-        et.ElementTree(root).write(os.path.join(path, "order.xml"))
-
-    def load_from_file(self, path):
-        file_list = os.listdir(path)
-
-        re_pattern = re.compile(r"[0-9]{" + str(self.OBJ_ID_LENGTH) + r"}_.*")
-        object_dirs = [f for f in file_list if re_pattern.match(f) != None]
-        self.order_map = { "OBCD" : [], "OBIM" : [] }
-        for od in object_dirs:
-            new_path = os.path.join(path, od)
-
-            objimage = BlockOBIMV5(self.block_name_length, self.crypt_value)
-            objimage.load_from_file(new_path)
-            self.add_image_block(objimage)
-
-            objcode = BlockOBCDV5(self.block_name_length, self.crypt_value)
-            objcode.load_from_file(new_path)
-            self.add_code_block(objcode)
-
-        self._load_order_from_xml(path)
-
-    def _load_order_from_xml(self, path):
-        order_fname = os.path.join(path, "order.xml")
-        if not os.path.isfile(order_fname):
-            # If order.xml does not exist, use whatever order we want.
-            return
-
-        tree = et.parse(order_fname)
-        root = tree.getroot()
-
-        loaded_order_map = self.order_map
-        self.order_map = { "OBCD" : [], "OBIM" : [] }
-
-        for order_list in root.findall("order-list"):
-            block_type = order_list.get("block-type")
-
-            for o in order_list.findall("order-entry"):
-                if not block_type in self.order_map:
-                    self.order_map[block_type] = []
-                self.order_map[block_type].append(util.parse_int_from_xml(o.text))
-
-            # Retain order of items loaded but not present in order.xml
-            if block_type in loaded_order_map:
-                extra_orders = [i for i in loaded_order_map[block_type] if not i in self.order_map[block_type]]
-                self.order_map[block_type].extend(extra_orders)
-
-    def generate_file_name(self):
-        return "objects"
-
-    def __repr__(self):
-        childstr = ["obj_" + str(c) for c in self.objects.keys()]
-        return "[OBIM & OBCD, " + "[" + ", ".join(childstr) + "] " + "]"
-
+class ObjectBlockContainerV5(ObjectBlockContainer):
+    def _init_class_data(self):
+        self.obcd_name = "OBCD"
+        self.obim_name = "OBIM"
+        self.obcd_class = BlockOBCDV5
+        self.obim_class = BlockOBIMV5
 
 class BlockOBIMV5(BlockContainerV5):
     name = "OBIM"
@@ -565,6 +421,18 @@ class BlockOBIMV5(BlockContainerV5):
     def generate_file_name(self):
         return ""
 
+    def generate_xml_node(self, parent_node):
+        """ Adds a new XML node to the given parent node."""
+        obim = et.SubElement(parent_node, "image")
+        et.SubElement(obim, "x").text = util.output_int_to_xml(self.imhd.x)
+        et.SubElement(obim, "y").text = util.output_int_to_xml(self.imhd.y)
+        et.SubElement(obim, "width").text = util.output_int_to_xml(self.imhd.width)
+        et.SubElement(obim, "height").text = util.output_int_to_xml(self.imhd.height)
+        et.SubElement(obim, "flags").text = util.output_hex_to_xml(self.imhd.flags)
+        et.SubElement(obim, "unknown").text = util.output_hex_to_xml(self.imhd.unknown)
+        et.SubElement(obim, "num_images").text = util.output_int_to_xml(self.imhd.num_imnn)
+        et.SubElement(obim, "num_zplanes").text = util.output_int_to_xml(self.imhd.num_zpnn)
+
 
 class BlockIMHDV5(BlockDefaultV5):
     name = "IMHD"
@@ -610,7 +478,7 @@ class BlockIMHDV5(BlockDefaultV5):
         root = tree.getroot()
 
         # Shared
-        self.obj_id = int(root.find("id").text)
+        self.obj_id = util.parse_int_from_xml(root.find("id").text)
 
         # OBIM
         obim_node = root.find("image")
@@ -695,6 +563,17 @@ class BlockOBCDV5(BlockContainerV5):
     def generate_file_name(self):
         return str(self.obj_id) + "_" + self.obj_name
 
+    def generate_xml_node(self, parent_node):
+        obcd = et.SubElement(parent_node, "code")
+        et.SubElement(obcd, "x").text = util.output_int_to_xml(self.cdhd.x)
+        et.SubElement(obcd, "y").text = util.output_int_to_xml(self.cdhd.y)
+        et.SubElement(obcd, "width").text = util.output_int_to_xml(self.cdhd.width)
+        et.SubElement(obcd, "height").text = util.output_int_to_xml(self.cdhd.height)
+        et.SubElement(obcd, "flags").text = util.output_hex_to_xml(self.cdhd.flags)
+        et.SubElement(obcd, "parent").text = util.output_int_to_xml(self.cdhd.parent)
+        et.SubElement(obcd, "walk_x").text = util.output_int_to_xml(self.cdhd.walk_x)
+        et.SubElement(obcd, "walk_y").text = util.output_int_to_xml(self.cdhd.walk_y)
+        et.SubElement(obcd, "actor_dir").text = util.output_int_to_xml(self.cdhd.actor_dir)
 
 class BlockOBNAV5(BlockDefaultV5):
     name = "OBNA"
@@ -766,7 +645,7 @@ class BlockCDHDV5(BlockDefaultV5):
         root = tree.getroot()
 
         # Shared
-        obj_id = int(root.find("id").text)
+        obj_id = util.parse_int_from_xml(root.find("id").text)
         self.obj_id = obj_id
 
         # OBCD
@@ -1274,7 +1153,7 @@ class BlockDOBJV5(BlockDefaultV5):
             et.SubElement(obj_node, "id").text = util.output_int_to_xml(i + 1)
             et.SubElement(obj_node, "owner").text = util.output_int_to_xml(owner)
             et.SubElement(obj_node, "state").text = util.output_int_to_xml(state)
-            et.SubElement(obj_node, "class-data").text = util.output_int_to_xml(class_data, util.HEX)
+            et.SubElement(obj_node, "class-data").text = util.output_hex_to_xml(class_data)
 
         util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "dobj.xml"))

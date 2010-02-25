@@ -1,7 +1,9 @@
 #! /usr/bin/python
 import array
+import functools
 import logging
 import os
+import re
 import xml.etree.ElementTree as et
 import scummpacker_control as control
 import scummpacker_util as util
@@ -446,20 +448,22 @@ class BlockRoom(BlockContainer): # also globally indexed
         super(BlockRoom, self).save_to_resource(resource, room_start)
 
 class ObjectBlockContainer(object):
-
     """ Contains objects, which contain image and code blocks."""
+
     def __init__(self, block_name_length, crypt_value, *args, **kwds):
+        self._init_class_data()
         self.objects = {}
+        self.obj_id_length = 4 # should be increased depending on number of objects in the game
         self.block_name_length = block_name_length
         self.crypt_value = crypt_value
         self.name = "objects"
         self.order_map = { self.obcd_name : [], self.obim_name : [] }
-        self._init_class_data()
 
     def _init_class_data(self):
-        self.obj_id_length = 4
-        self.obcd_name = "OBCD"
-        self.obim_name = "OBIM"
+        self.obcd_name = None # string
+        self.obim_name = None # string
+        self.obcd_class = None # actual class to be instantiated when reading from file
+        self.obim_class = None # ditto
         raise NotImplementedError("This method must be overriden by a concrete class.")
 
     def add_code_block(self, block):
@@ -493,7 +497,7 @@ class ObjectBlockContainer(object):
     def save_to_resource(self, resource, room_start=0):
         object_keys = self.objects.keys()
         # Write all image blocks first
-        object_keys = util.ordered_sort(object_keys, self.order_map[obim_name])
+        object_keys = util.ordered_sort(object_keys, self.order_map[self.obim_name])
         for obj_id in object_keys:
             #logging.debug("Writing object image: " + str(obj_id))
             self.objects[obj_id][0].save_to_resource(resource, room_start)
@@ -513,27 +517,10 @@ class ObjectBlockContainer(object):
         et.SubElement(root, "id").text = util.output_int_to_xml(objcode.obj_id)
 
         # OBIM
-        obim = et.SubElement(root, "image")
-        et.SubElement(obim, "x").text = util.output_int_to_xml(objimage.imhd.x)
-        et.SubElement(obim, "y").text = util.output_int_to_xml(objimage.imhd.y)
-        et.SubElement(obim, "width").text = util.output_int_to_xml(objimage.imhd.width)
-        et.SubElement(obim, "height").text = util.output_int_to_xml(objimage.imhd.height)
-        et.SubElement(obim, "flags").text = util.output_int_to_xml(objimage.imhd.flags, util.HEX)
-        et.SubElement(obim, "unknown").text = util.output_int_to_xml(objimage.imhd.unknown, util.HEX)
-        et.SubElement(obim, "num_images").text = util.output_int_to_xml(objimage.imhd.num_imnn)
-        et.SubElement(obim, "num_zplanes").text = util.output_int_to_xml(objimage.imhd.num_zpnn)
+        objimage.generate_xml_node(root)
 
         # OBCD
-        obcd = et.SubElement(root, "code")
-        et.SubElement(obcd, "x").text = util.output_int_to_xml(objcode.cdhd.x)
-        et.SubElement(obcd, "y").text = util.output_int_to_xml(objcode.cdhd.y)
-        et.SubElement(obcd, "width").text = util.output_int_to_xml(objcode.cdhd.width)
-        et.SubElement(obcd, "height").text = util.output_int_to_xml(objcode.cdhd.height)
-        et.SubElement(obcd, "flags").text = util.output_int_to_xml(objcode.cdhd.flags, util.HEX)
-        et.SubElement(obcd, "parent").text = util.output_int_to_xml(objcode.cdhd.parent)
-        et.SubElement(obcd, "walk_x").text = util.output_int_to_xml(objcode.cdhd.walk_x)
-        et.SubElement(obcd, "walk_y").text = util.output_int_to_xml(objcode.cdhd.walk_y)
-        et.SubElement(obcd, "actor_dir").text = util.output_int_to_xml(objcode.cdhd.actor_dir)
+        objcode.generate_xml_node(root)
 
         util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "OBHD.xml"))
@@ -559,11 +546,11 @@ class ObjectBlockContainer(object):
         for od in object_dirs:
             new_path = os.path.join(path, od)
 
-            objimage = BlockOBIMV5(self.block_name_length, self.crypt_value)
+            objimage = self.obim_class(self.block_name_length, self.crypt_value)
             objimage.load_from_file(new_path)
             self.add_image_block(objimage)
 
-            objcode = BlockOBCDV5(self.block_name_length, self.crypt_value)
+            objcode = self.obcd_class(self.block_name_length, self.crypt_value)
             objcode.load_from_file(new_path)
             self.add_code_block(objcode)
 
@@ -661,7 +648,7 @@ class ScriptBlockContainer(object):
 
         for f in file_list:
             b = control.file_dispatcher.dispatch_next_block(f)
-            if b != None: #and self.script_types: #TODO: only load recognised scripts
+            if b != None: #and self.script_types: # TODO?: only load recognised scripts
                 b.load_from_file(os.path.join(path, f))
                 self.append(b)
 
@@ -672,3 +659,35 @@ class ScriptBlockContainer(object):
         childstr = [str(self.encd_script), str(self.excd_script)]
         childstr.extend([str(c) for c in self.local_scripts])
         return "[Scripts, " + ", ".join(childstr) + "]"
+
+class XMLHelper(object):
+    def __init__(self):
+        self.read_actions = {
+            'i' : functools.partial(self._read_value_from_xml_node, marshaller=util.parse_int_from_xml), # int
+            'h' : functools.partial(self._read_value_from_xml_node, marshaller=util.parse_int_from_xml), # hex
+            's' : functools.partial(self._read_value_from_xml_node, marshaller=util.escape_invalid_chars), # string
+            'n' : self.read # node
+        }
+        self.write_actions = {
+            'i' : functools.partial(self._write_value_from_xml_node, marshaller=util.output_int_to_xml), # int
+            'h' : functools.partial(self._write_value_from_xml_node, marshaller=util.output_hex_to_xml), # hex
+            's' : functools.partial(self._write_value_from_xml_node, marshaller=util.unescape_invalid_chars), # string
+            'n' : self.write # node
+        }
+
+    def read(self, destination, parent_node, structure):
+        for name, marshaller, attr in structure:
+            node = parent_node.find(parent_node, name)
+            self.read_actions[marshaller](destination, node, attr)
+
+    def _read_value_from_xml_node(self, destination, node, attr, marshaller):
+        value = marshaller(node.text)
+        setattr(destination, attr, value)
+
+    def _write_value_to_xml_node(self, caller, node, attr, marshaller):
+        node.text = marshaller(getattr(caller, attr))
+
+    def write(self, caller, parent_node, structure):
+        for name, marshaller, attr in structure:
+            node = et.SubElement(parent_node, name)
+            self.write_actions[marshaller](caller, node, attr)

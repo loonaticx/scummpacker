@@ -80,7 +80,7 @@ class FileDispatcherV5(AbstractFileDispatcher):
         r"TRNS.dmp" : blocks.BlockDefaultV5,
         r"RMHD.xml" : blocks.BlockRMHDV5,
         r"RMIM" : blocks.BlockContainerV5,
-        r"objects" : blocks.ObjectBlockContainer,
+        r"objects" : blocks.ObjectBlockContainerV5,
         r"scripts" : blocks.ScriptBlockContainerV5,
         # ---RMIM
         r"RMIH.xml" : blocks.BlockRMIHV5,

@@ -95,6 +95,19 @@ class BlockContainerV4(BlockContainer, BlockDefaultV4):
 
 class BlockOCV4(BlockDefaultV4):
     name = "OC"
+    xml_structure = (
+        ("code", 'p', (
+            ("x", 'i', 'cdhd.x'),
+            ("y", 'i', 'cdhd.y'),
+            ("width", 'i', 'cdhd.width'),
+            ("height", 'i', 'cdhd.height'),
+            ("unknown", 'h', 'cdhd.flags'),
+            ("parent_state", 'h', 'cdhd.parent_state'),
+            ("parent", 'h', 'cdhd.parent'),
+            ("walk_x", 'i', 'cdhd.walk_x'),
+            ("walk_y", 'i', 'cdhd.walk_y'),
+            )),
+        )
 
     def _read_data(self, resource, start, decrypt):
         """
@@ -106,7 +119,7 @@ class BlockOCV4(BlockDefaultV4):
           parent    : 8
           walk_x    : 16le signed
           walk_y    : 16le signed
-          height and actor_dir : 8 ( actor_dir is ANDed 0x07, heigh ANDed 0xF8)
+          height and actor_dir : 8 (actor_dir is ANDed 0x07, height ANDed 0xF8)
           name_offset : 8 (offset from start of the file)
           verb table : variable
           obj_name  : variable, null-terminated
@@ -136,40 +149,46 @@ class BlockOCV4(BlockDefaultV4):
                 break
             self.obj_name += c
 
-    # TODO: all method below
+    # TODO: all methods below. WIP
     def load_from_file(self, path):
-        self.name = "CDHD"
-        self.size = 13 + 8 # data + header
-        self._load_header_from_xml(path)
+        self._load_header_from_xml(os.path.join(path, "OBHD.xml"))
+        self._load_script_from_file(os.path.join(path, "OC.dmp"))
+        self.size = self._calculate_size()
 
     def _load_header_from_xml(self, path):
         tree = et.parse(path)
         root = tree.getroot()
 
         # Shared
-        obj_id = int(root.find("id").text)
-        self.obj_id = obj_id
+        self.obj_id = util.parse_int_from_xml(root.find("id").text)
+        self.obj_name = root.find("name").text
 
-        # OBCD
-        obcd_node = root.find("code")
-        self.x = util.parse_int_from_xml(obcd_node.find("x").text)
-        self.y = util.parse_int_from_xml(obcd_node.find("y").text)
-        self.width = util.parse_int_from_xml(obcd_node.find("width").text)
-        self.height = util.parse_int_from_xml(obcd_node.find("height").text)
+        XMLHelper().read(root, self.xml_structure)
 
-        self.flags = util.parse_int_from_xml(obcd_node.find("flags").text)
-        self.parent = util.parse_int_from_xml(obcd_node.find("parent").text)
-        self.walk_x = util.parse_int_from_xml(obcd_node.find("walk_x").text)
-        self.walk_y = util.parse_int_from_xml(obcd_node.find("walk_y").text)
-        self.actor_dir = util.parse_int_from_xml(obcd_node.find("actor_dir").text)
+    def _load_script_from_file(self, path):
+        # Skip the header info
+        pass
+        # read verb table
+        pass
+        # read script
+        pass
+        # Alternatively, load the whole thing in raw?
 
     def _write_data(self, outfile, encrypt):
         """ Assumes it's writing to a resource."""
-        data = struct.pack("<H6B2hB", self.obj_id, self.x, self.y, self.width, self.height, self.flags,
-            self.parent, self.walk_x, self.walk_y, self.actor_dir)
-        if encrypt:
-            data = util.crypt(data, self.crypt_value)
-        outfile.write(data)
+        pass
+#        data = struct.pack("<H6B2hB", self.obj_id, self.x, self.y, self.width, self.height, self.flags,
+#            self.parent, self.walk_x, self.walk_y, self.actor_dir)
+#        if encrypt:
+#            data = util.crypt(data, self.crypt_value)
+#        outfile.write(data)
+
+    def _calculate_size(self):
+        # block header + header data + name + null-terminator + verb table + script size
+        return 6 + 13 + len(self.obj_name) + 1 # + verb table + script size
+
+    def generate_xml_node(self, parent_node):
+        XMLHelper().write(parent_node, self.xml_structure)
 
 class BlockFOV4(BlockDefaultV4):
     name = "FO"
@@ -178,7 +197,7 @@ class BlockFOV4(BlockDefaultV4):
         num_rooms = util.str_to_int(resource.read(1),
                                     crypt_val=(self.crypt_value if decrypt else None))
 
-        for i in xrange(num_rooms):
+        for _ in xrange(num_rooms):
             room_no = util.str_to_int(resource.read(1),
                                       crypt_val=(self.crypt_value if decrypt else None))
             lf_offset = util.str_to_int(resource.read(4),
@@ -219,7 +238,7 @@ class BlockFOV4(BlockDefaultV4):
         block_start = resource.tell()
         self._write_dummy_header(resource, True)
         resource.write(util.int_to_str(num_rooms, 1, util.BE, self.crypt_value))
-        for i in xrange(num_rooms):
+        for _ in xrange(num_rooms):
             resource.write("\x00" * 5)
         block_end = resource.tell()
         self.size = block_end - block_start
@@ -263,6 +282,16 @@ class BlockSOV4(BlockContainerV4, BlockGloballyIndexedV4):
                 + ("unk_" if self.is_unknown else "")
                 + str(self.index).zfill(3))
         return name
+
+#--------------------
+# Meta or container blocks.
+
+class ObjectBlockContainerV4(ObjectBlockContainer):
+    def _init_class_data(self):
+        self.obcd_name = "OC"
+        self.obim_name = "OI"
+        self.obcd_class = BlockOCV4
+        self.obim_class = BlockOIV4
 
 class ScriptBlockContainerV4(ScriptBlockContainer):
     local_scripts_name = "LS"
