@@ -75,9 +75,9 @@ class AbstractBlock(object):
         raise NotImplementedError("This method must be overriden by a concrete class.")
 
     def _write_data(self, outfile, encrypt):
-        self._write_raw_data(outfile, encrypt)
+        self._write_raw_data(outfile, self.data, encrypt)
 
-    def _write_raw_data(self, outfile, encrypt):
+    def _write_raw_data(self, outfile, data, encrypt):
         data = self.data
         if encrypt:
             data = util.crypt(data, self.crypt_value)
@@ -328,7 +328,7 @@ class BlockLocalScript(AbstractBlock):
         if encrypt:
             script_num = util.crypt(script_num, self.crypt_value)
         outfile.write(script_num)
-        self._write_raw_data(outfile, encrypt)
+        self._write_raw_data(outfile, self.data, encrypt)
 
     def generate_file_name(self):
         return self.name + "_" + str(self.script_id).zfill(3) + ".dmp"

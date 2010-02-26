@@ -120,7 +120,7 @@ class BlockOCV4(BlockDefaultV4):
           walk_x    : 16le signed
           walk_y    : 16le signed
           height and actor_dir : 8 (actor_dir is ANDed 0x07, height ANDed 0xF8)
-          name_offset : 8 (offset from start of the file)
+          name_offset : 8 (offset from start of the block)
           verb table : variable
           obj_name  : variable, null-terminated
         """
@@ -140,14 +140,23 @@ class BlockOCV4(BlockDefaultV4):
         self.height = height_and_actor_dir & 0xF8
         self.actor_dir = height_and_actor_dir & 0x07
 
+        # Read the event table
+        event_table_size = (start + name_offset) - resource.tell()
+        data = resource.self._read_raw_data(resource, event_table_size, decrypt)
+        self.event_table = data
+
         # Read object name (null-terminated string)
-        resource.seek(name_offset, os.SEEK_SET)
+        #resource.seek(name_offset, os.SEEK_SET)
         self.obj_name = ''
         while True:
             c = resource.read(1)
             if c == "\x00":
                 break
             self.obj_name += c
+
+        # Read the script data (raw)
+        data = self._read_raw_data(resource, self.size - (resource.tell() - start), decrypt)
+        self.script_data = data
 
     # TODO: all methods below. WIP
     def load_from_file(self, path):
@@ -166,26 +175,50 @@ class BlockOCV4(BlockDefaultV4):
         XMLHelper().read(root, self.xml_structure)
 
     def _load_script_from_file(self, path):
-        # Skip the header info
-        pass
-        # read verb table
-        pass
-        # read script
-        pass
-        # Alternatively, load the whole thing in raw?
+        with file(path, 'rb') as script_file:
+            # Skip the header info, except name offset
+            script_file.seek(6 + 12)
+            name_offset = script_file.read(1)
+            # read event table
+            event_table_size = (start + name_offset) - resource.tell()
+            data = resource.self._read_raw_data(script_file, event_table_size, False)
+            self.event_table = data
+            # skip the object name
+            script_file.seek(len(self.obj_name) + 1, os.SEEK_CUR)
+            # read script data
+            data = resource.self._read_raw_data(script_file, None, False) # will "None" work here?
+            self.script_data = data
 
     def _write_data(self, outfile, encrypt):
         """ Assumes it's writing to a resource."""
-        pass
-#        data = struct.pack("<H6B2hB", self.obj_id, self.x, self.y, self.width, self.height, self.flags,
-#            self.parent, self.walk_x, self.walk_y, self.actor_dir)
-#        if encrypt:
-#            data = util.crypt(data, self.crypt_value)
-#        outfile.write(data)
+        # TODO: validate values fit into clamped?
+        y_and_parent_state = (self.parent_state & 0x80) | (self.y & 0x7F)
+        height_and_actor_dir = (self.height & 0xF8) | (self.actor_dir & 0x07)
+
+        name_offset = 6 + 13 + len(self.event_table)
+
+        # Object header
+        data = struct.pack("<H5B2h2B", self.obj_id, self.unknown, self.x, y_and_parent_state, self.width,
+            self.parent, self.walk_x, self.walk_y, height_and_actor_dir, name_offset)
+        if encrypt:
+            data = util.crypt(data, self.crypt_value)
+        outfile.write(data)
+
+        # Event table
+        self._write_raw_data(resource, self.event_table, encrypt)
+
+        # Object name
+        data = self.obj_name + "\x00"
+        if encrypt:
+            data = util.crypt(data, self.crypt_value)
+        outfile.write(data)
+
+        # Script data
+        self._write_raw_data(resource, self.script_data, encrypt)
 
     def _calculate_size(self):
-        # block header + header data + name + null-terminator + verb table + script size
-        return 6 + 13 + len(self.obj_name) + 1 # + verb table + script size
+        # block header + header data + verb table + object name + null-terminator + script size
+        return 6 + 13 + len(self.event_table) + len(self.obj_name) + 1 + len(self.script_data)
 
     def generate_xml_node(self, parent_node):
         XMLHelper().write(parent_node, self.xml_structure)

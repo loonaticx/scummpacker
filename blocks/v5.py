@@ -814,8 +814,8 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
                                            (room_num, location - room_offset),
                                            self.index)
         if self.is_cd_track:
-            self._write_header(resource, True)
-            self._write_raw_data(resource, True)
+            self._write_header(resource, self.data, True)
+            self._write_raw_data(resource, self.data, True)
         else:
             super(BlockSOUNV5, self).save_to_resource(resource, room_start)
 
