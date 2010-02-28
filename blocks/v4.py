@@ -92,11 +92,79 @@ class BlockContainerV4(BlockContainer, BlockDefaultV4):
 
 #--------------------
 # Concrete Blocks
+class BlockFOV4(BlockDefaultV4):
+    name = "FO"
+
+    def _read_data(self, resource, start, decrypt):
+        num_rooms = util.str_to_int(resource.read(1),
+                                    crypt_val=(self.crypt_value if decrypt else None))
+
+        for _ in xrange(num_rooms):
+            room_no = util.str_to_int(resource.read(1),
+                                      crypt_val=(self.crypt_value if decrypt else None))
+            lf_offset = util.str_to_int(resource.read(4),
+                                      crypt_val=(self.crypt_value if decrypt else None))
+
+            control.global_index_map.map_index("LF", lf_offset, room_no)
+            control.global_index_map.map_index("RO", lf_offset + self.block_name_length + 4, lf_offset) # HACK
+        print control.global_index_map.items("LF")
+
+    def save_to_file(self, path):
+        """Don't need to save offsets since they're calculated when packing."""
+        return
+
+    def save_to_resource(self, resource, room_start=0):
+        """This method should only be called after write_dummy_block has been invoked,
+        otherwise this block may have no size attribute initialised."""
+        # Write name/size (probably again, since write_dummy_block also writes it)
+        self._write_header(resource, True)
+        # Write number of rooms, followed by offset table
+        # Possible inconsistency, in that this uses the global index map for ROOM blocks,
+        #  whereas the "write_dummy_block" just looks at the number passed in, which
+        #  comes from the number of entries in the file system.
+        room_table = sorted(control.global_index_map.items("RO"))
+        num_of_rooms = len(room_table)
+        resource.write(util.int_to_str(num_of_rooms, 1, util.LE, self.crypt_value))
+        for room_num, room_offset in room_table:
+            room_num = int(room_num)
+            resource.write(util.int_to_str(room_num, 1, util.LE, self.crypt_value))
+            resource.write(util.int_to_str(room_offset, 4, util.LE, self.crypt_value))
+
+    def write_dummy_block(self, resource, num_rooms):
+        """This method should be called before save_to_resource. It just
+        reserves space until the real block is written.
+
+        The reason for doing this is that the block begins at the start of the
+        resource file, but contains the offsets of all of the room blocks, which
+        won't be known until after they've all been written."""
+        block_start = resource.tell()
+        self._write_dummy_header(resource, True)
+        resource.write(util.int_to_str(num_rooms, 1, util.BE, self.crypt_value))
+        for _ in xrange(num_rooms):
+            resource.write("\x00" * 5)
+        block_end = resource.tell()
+        self.size = block_end - block_start
+
+class BlockLFV4(BlockLucasartsFile, BlockContainerV4, BlockGloballyIndexedV4):
+    is_unknown = False
+    
+    def _read_data(self, resource, start, decrypt):
+        """LF blocks store the room number before any child blocks.
+
+        Also, first LF file seems to store (junk?) data after the last child block, at least
+        for LOOM CD and Monkey Island 1."""
+        logging.debug("Reading children from container block...")
+        # NOTE: although we read index in here, it gets overridden in load_from_resource.
+        self.index = util.str_to_int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
+        super(BlockLFV4, self)._read_data(resource, start, decrypt)
+
+class BlockLSV4(BlockLocalScript, BlockDefaultV4):
+    name = "LS"
 
 class BlockOCV4(BlockDefaultV4):
     name = "OC"
     xml_structure = (
-        ("code", 'p', (
+        ("code", 'n', (
             ("x", 'i', 'cdhd.x'),
             ("y", 'i', 'cdhd.y'),
             ("width", 'i', 'cdhd.width'),
@@ -106,8 +174,9 @@ class BlockOCV4(BlockDefaultV4):
             ("parent", 'h', 'cdhd.parent'),
             ("walk_x", 'i', 'cdhd.walk_x'),
             ("walk_y", 'i', 'cdhd.walk_y'),
-            )),
-        )
+            )
+        ),
+    )
 
     def _read_data(self, resource, start, decrypt):
         """
@@ -186,7 +255,11 @@ class BlockOCV4(BlockDefaultV4):
             # skip the object name
             script_file.seek(len(self.obj_name) + 1, os.SEEK_CUR)
             # read script data
-            data = resource.self._read_raw_data(script_file, None, False) # will "None" work here?
+            start_script = script_file.tell()
+            start_script.seek(0, os.SEEK_END)
+            end_script = script_file.tell()
+            script_size = end_script - start_script
+            data = resource.self._read_raw_data(script_file, script_size, False)
             self.script_data = data
 
     def _write_data(self, outfile, encrypt):
@@ -223,74 +296,9 @@ class BlockOCV4(BlockDefaultV4):
     def generate_xml_node(self, parent_node):
         XMLHelper().write(parent_node, self.xml_structure)
 
-class BlockFOV4(BlockDefaultV4):
-    name = "FO"
-
-    def _read_data(self, resource, start, decrypt):
-        num_rooms = util.str_to_int(resource.read(1),
-                                    crypt_val=(self.crypt_value if decrypt else None))
-
-        for _ in xrange(num_rooms):
-            room_no = util.str_to_int(resource.read(1),
-                                      crypt_val=(self.crypt_value if decrypt else None))
-            lf_offset = util.str_to_int(resource.read(4),
-                                      crypt_val=(self.crypt_value if decrypt else None))
-
-            control.global_index_map.map_index("LF", lf_offset, room_no)
-            control.global_index_map.map_index("RO", lf_offset + self.block_name_length + 4, lf_offset) # HACK
-        print control.global_index_map.items("LF")
-
-    def save_to_file(self, path):
-        """Don't need to save offsets since they're calculated when packing."""
-        return
-
-    def save_to_resource(self, resource, room_start=0):
-        """This method should only be called after write_dummy_block has been invoked,
-        otherwise this block may have no size attribute initialised."""
-        # Write name/size (probably again, since write_dummy_block also writes it)
-        self._write_header(resource, True)
-        # Write number of rooms, followed by offset table
-        # Possible inconsistency, in that this uses the global index map for ROOM blocks,
-        #  whereas the "write_dummy_block" just looks at the number passed in, which
-        #  comes from the number of entries in the file system.
-        room_table = sorted(control.global_index_map.items("RO"))
-        num_of_rooms = len(room_table)
-        resource.write(util.int_to_str(num_of_rooms, 1, util.LE, self.crypt_value))
-        for room_num, room_offset in room_table:
-            room_num = int(room_num)
-            resource.write(util.int_to_str(room_num, 1, util.LE, self.crypt_value))
-            resource.write(util.int_to_str(room_offset, 4, util.LE, self.crypt_value))
-
-    def write_dummy_block(self, resource, num_rooms):
-        """This method should be called before save_to_resource. It just
-        reserves space until the real block is written.
-
-        The reason for doing this is that the block begins at the start of the
-        resource file, but contains the offsets of all of the room blocks, which
-        won't be known until after they've all been written."""
-        block_start = resource.tell()
-        self._write_dummy_header(resource, True)
-        resource.write(util.int_to_str(num_rooms, 1, util.BE, self.crypt_value))
-        for _ in xrange(num_rooms):
-            resource.write("\x00" * 5)
-        block_end = resource.tell()
-        self.size = block_end - block_start
-
-class BlockLFV4(BlockLucasartsFile, BlockContainerV4, BlockGloballyIndexedV4):
-    is_unknown = False
-    
-    def _read_data(self, resource, start, decrypt):
-        """LF blocks store the room number before any child blocks.
-
-        Also, first LF file seems to store (junk?) data after the last child block, at least
-        for LOOM CD and Monkey Island 1."""
-        logging.debug("Reading children from container block...")
-        # NOTE: although we read index in here, it gets overridden in load_from_resource.
-        self.index = util.str_to_int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
-        super(BlockLFV4, self)._read_data(resource, start, decrypt)
-
-class BlockLSV4(BlockLocalScript, BlockDefaultV4):
-    name = "LS"
+class BlockOIV4(BlockDefaultV4):
+    pass
+    # TODO: read object ID but otherwise act as generic block
 
 class BlockROV4(BlockRoom, BlockContainerV4): # also globally indexed
     def _init_class_data(self):
