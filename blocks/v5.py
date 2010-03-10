@@ -263,45 +263,20 @@ class BlockSBLV5(BlockSoundV5):
     def generate_file_name(self):
         return self.name.rstrip() + ".voc"
 
-class BlockROOMV5(BlockContainerV5): # also globally indexed
-    name = "ROOM"
-
-    def __init__(self, *args, **kwds):
-        super(BlockROOMV5, self).__init__(*args, **kwds)
+class BlockROOMV5(BlockRoom, BlockContainerV5): # also globally indexed
+    def _init_class_data(self):
+        self.name = "ROOM"
+        self.lf_name = "LFLF"
         self.script_types = frozenset(["ENCD",
-                                       "EXCD",
-                                       "LSCR"])
+                                  "EXCD",
+                                  "LSCR"])
         self.object_types = frozenset(["OBIM",
-                                       "OBCD"])
-
-    def _read_data(self, resource, start, decrypt):
-        end = start + self.size
-        object_container = ObjectBlockContainerV5(self.block_name_length, self.crypt_value)
-        script_container = ScriptBlockContainerV5(self.block_name_length, self.crypt_value)
-        while resource.tell() < end:
-            block = control.block_dispatcher.dispatch_next_block(resource)
-            block.load_from_resource(resource)
-            if block.name in self.script_types:
-                script_container.append(block)
-            elif block.name == "OBIM":
-                object_container.add_image_block(block)
-            elif block.name == "OBCD":
-                object_container.add_code_block(block)
-            elif block.name == "NLSC": # ignore this since we can generate it
-                del block
-                continue
-            else:
-                self.append(block)
-        self.append(object_container)
-        self.append(script_container)
-
-    def save_to_resource(self, resource, room_start=0):
-        location = resource.tell()
-        logging.debug("Saving ROOM")
-        #print control.global_index_map.items("ROOM")
-        room_num = control.global_index_map.get_index("LFLF", room_start)
-        control.global_index_map.map_index("ROOM", room_num, location)
-        super(BlockROOMV5, self).save_to_resource(resource, room_start)
+                                  "OBCD"])
+        self.object_image_type = "OBIM"
+        self.object_code_type = "OBCD"
+        self.num_scripts_type = "NLSC"
+        self.script_container_class = ScriptBlockContainerV5
+        self.object_container_class = ObjectBlockContainerV5
 
 class BlockLOFFV5(BlockDefaultV5):
     name = "LOFF"

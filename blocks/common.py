@@ -78,10 +78,10 @@ class AbstractBlock(object):
         self._write_raw_data(outfile, self.data, encrypt)
 
     def _write_raw_data(self, outfile, data, encrypt):
-        data = self.data
+        data_out = data
         if encrypt:
-            data = util.crypt(data, self.crypt_value)
-        data.tofile(outfile)
+            data_out = util.crypt(data_out, self.crypt_value)
+        data_out.tofile(outfile)
 
     def generate_file_name(self):
         return self.name + ".dmp"
@@ -421,23 +421,23 @@ class BlockRoom(BlockContainer): # also globally indexed
 
     def _read_data(self, resource, start, decrypt):
         end = start + self.size
-        #object_container = self.object_container_class(self.block_name_length, self.crypt_value)
+        object_container = self.object_container_class(self.block_name_length, self.crypt_value)
         script_container = self.script_container_class(self.block_name_length, self.crypt_value)
         while resource.tell() < end:
             block = control.block_dispatcher.dispatch_next_block(resource)
             block.load_from_resource(resource)
             if block.name in self.script_types:
                 script_container.append(block)
-#            elif block.name == self.object_image_type:
-#                object_container.add_image_block(block)
-#            elif block.name == self.object_code_type:
-#                object_container.add_code_block(block)
+            elif block.name == self.object_image_type:
+                object_container.add_image_block(block)
+            elif block.name == self.object_code_type:
+                object_container.add_code_block(block)
             elif block.name == self.num_scripts_type: # ignore this since we can generate it
                 del block
                 continue
             else:
                 self.append(block)
-        #self.append(object_container)
+        self.append(object_container)
         self.append(script_container)
 
     def save_to_resource(self, resource, room_start=0):
@@ -453,7 +453,7 @@ class ObjectBlockContainer(object):
     def __init__(self, block_name_length, crypt_value, *args, **kwds):
         self._init_class_data()
         self.objects = {}
-        self.obj_id_length = 4 # should be increased depending on number of objects in the game
+        self.obj_id_name_length = 4 # should be increased depending on number of objects in the game
         self.block_name_length = block_name_length
         self.crypt_value = crypt_value
         self.name = "objects"
@@ -484,7 +484,7 @@ class ObjectBlockContainer(object):
             os.mkdir(objects_path) # throws an exception if can't create dir
         for objimage, objcode in self.objects.values():
             # New path name = Object ID + object name (removing trailing spaces)
-            obj_path_name = str(objcode.obj_id).zfill(self.obj_id_length) + "_" + util.discard_invalid_chars(objcode.obj_name).rstrip()
+            obj_path_name = str(objcode.obj_id).zfill(self.obj_id_name_length) + "_" + util.discard_invalid_chars(objcode.obj_name).rstrip()
             #logging.debug("Writing object: %s" % obj_path_name)
             newpath = os.path.join(objects_path, obj_path_name)
             if not os.path.isdir(newpath):
@@ -540,7 +540,7 @@ class ObjectBlockContainer(object):
     def load_from_file(self, path):
         file_list = os.listdir(path)
 
-        re_pattern = re.compile(r"[0-9]{" + str(self.obj_id_length) + r"}_.*")
+        re_pattern = re.compile(r"[0-9]{" + str(self.obj_id_name_length) + r"}_.*")
         object_dirs = [f for f in file_list if re_pattern.match(f) != None]
         self.order_map = { self.obcd_name : [], self.obim_name : [] }
         for od in object_dirs:
@@ -669,9 +669,9 @@ class XMLHelper(object):
             'n' : self.read # node
         }
         self.write_actions = {
-            'i' : functools.partial(self._write_value_from_xml_node, marshaller=util.output_int_to_xml), # int
-            'h' : functools.partial(self._write_value_from_xml_node, marshaller=util.output_hex_to_xml), # hex
-            's' : functools.partial(self._write_value_from_xml_node, marshaller=util.unescape_invalid_chars), # string
+            'i' : functools.partial(self._write_value_to_xml_node, marshaller=util.output_int_to_xml), # int
+            'h' : functools.partial(self._write_value_to_xml_node, marshaller=util.output_hex_to_xml), # hex
+            's' : functools.partial(self._write_value_to_xml_node, marshaller=util.unescape_invalid_chars), # string
             'n' : self.write # node
         }
 

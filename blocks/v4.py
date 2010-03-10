@@ -2,6 +2,7 @@
 from __future__ import with_statement
 import logging
 import os
+import struct
 import xml.etree.ElementTree as et
 import scummpacker_control as control
 #import scummpacker_util as util
@@ -53,13 +54,14 @@ class BlockContainerV4(BlockContainer, BlockDefaultV4):
          "PA", # palette
          "SA",
          "BM", # bitmap
+         "objects",
          "OI", # object image
-         "NL", # ???
+         "NL", # ??? num local scripts?
          "SL", # ???
          "OC", # object code
          "EX", # exit code
          "EN", # entry code
-         "LC", # number of local scripts
+         "LC", # number of local scripts?
          "LS", # local script
         "scripts",
         # Inside LF again
@@ -165,15 +167,15 @@ class BlockOCV4(BlockDefaultV4):
     name = "OC"
     xml_structure = (
         ("code", 'n', (
-            ("x", 'i', 'cdhd.x'),
-            ("y", 'i', 'cdhd.y'),
-            ("width", 'i', 'cdhd.width'),
-            ("height", 'i', 'cdhd.height'),
-            ("unknown", 'h', 'cdhd.flags'),
-            ("parent_state", 'h', 'cdhd.parent_state'),
-            ("parent", 'h', 'cdhd.parent'),
-            ("walk_x", 'i', 'cdhd.walk_x'),
-            ("walk_y", 'i', 'cdhd.walk_y'),
+            ("x", 'i', 'x'),
+            ("y", 'i', 'y'),
+            ("width", 'i', 'width'),
+            ("height", 'i', 'height'),
+            ("unknown", 'h', 'unknown'),
+            ("parent_state", 'h', 'parent_state'),
+            ("parent", 'h', 'parent'),
+            ("walk_x", 'i', 'walk_x'),
+            ("walk_y", 'i', 'walk_y'),
             )
         ),
     )
@@ -211,7 +213,8 @@ class BlockOCV4(BlockDefaultV4):
 
         # Read the event table
         event_table_size = (start + name_offset) - resource.tell()
-        data = resource.self._read_raw_data(resource, event_table_size, decrypt)
+        #logging.debug("event table size: %s, thing1: %s, resource tell: %s" % (event_table_size, (start + name_offset), resource.tell()))
+        data = self._read_raw_data(resource, event_table_size - 1, decrypt)
         self.event_table = data
 
         # Read object name (null-terminated string)
@@ -219,15 +222,17 @@ class BlockOCV4(BlockDefaultV4):
         self.obj_name = ''
         while True:
             c = resource.read(1)
+            if decrypt:
+                c = util.crypt(c, self.crypt_value)
             if c == "\x00":
                 break
             self.obj_name += c
 
         # Read the script data (raw)
+        #logging.debug("self size: %s, thing1: %s, thing2: %s, resource tell: %s" % (self.size, (resource.tell() - start), self.size - (resource.tell() - start), resource.tell()))
         data = self._read_raw_data(resource, self.size - (resource.tell() - start), decrypt)
         self.script_data = data
 
-    # TODO: all methods below. WIP
     def load_from_file(self, path):
         self._load_header_from_xml(os.path.join(path, "OBHD.xml"))
         self._load_script_from_file(os.path.join(path, "OC.dmp"))
@@ -241,7 +246,7 @@ class BlockOCV4(BlockDefaultV4):
         self.obj_id = util.parse_int_from_xml(root.find("id").text)
         self.obj_name = root.find("name").text
 
-        XMLHelper().read(root, self.xml_structure)
+        XMLHelper().read(self, root, self.xml_structure)
 
     def _load_script_from_file(self, path):
         with file(path, 'rb') as script_file:
@@ -278,7 +283,7 @@ class BlockOCV4(BlockDefaultV4):
         outfile.write(data)
 
         # Event table
-        self._write_raw_data(resource, self.event_table, encrypt)
+        self._write_raw_data(outfile, self.event_table, encrypt)
 
         # Object name
         data = self.obj_name + "\x00"
@@ -287,18 +292,67 @@ class BlockOCV4(BlockDefaultV4):
         outfile.write(data)
 
         # Script data
-        self._write_raw_data(resource, self.script_data, encrypt)
+        self._write_raw_data(outfile, self.script_data, encrypt)
 
     def _calculate_size(self):
         # block header + header data + verb table + object name + null-terminator + script size
         return 6 + 13 + len(self.event_table) + len(self.obj_name) + 1 + len(self.script_data)
 
     def generate_xml_node(self, parent_node):
-        XMLHelper().write(parent_node, self.xml_structure)
+        XMLHelper().write(self, parent_node, self.xml_structure)
 
 class BlockOIV4(BlockDefaultV4):
-    pass
-    # TODO: read object ID but otherwise act as generic block
+    """ Reads object ID but otherwise acts as generic block."""
+    name = "OI"
+    xml_structure = tuple()
+
+    def _read_data(self, resource, start, decrypt):
+        data = resource.read(2)
+        if decrypt:
+            data = util.crypt(data, self.crypt_value)
+        self.obj_id = struct.unpack("<H", data)[0]
+        self.data = self._read_raw_data(resource, self.size - (resource.tell() - start), decrypt)
+
+    def load_from_file(self, path):
+        self._load_header_from_xml(os.path.join(path, "OBHD.xml"))
+        self._load_data_from_file(os.path.join(path, "OI.dmp"))
+        self.size = self._calculate_size()
+
+    def _load_header_from_xml(self, path):
+        tree = et.parse(path)
+        root = tree.getroot()
+
+        # Shared
+        self.obj_id = util.parse_int_from_xml(root.find("id").text)
+
+    def _load_data_from_file(self, path):
+        with file(path, 'rb') as data_file:
+            # Skip the header info
+            data_file.seek(6 + 2)
+            # read script data
+            start_data = data_file.tell()
+            start_data.seek(0, os.SEEK_END)
+            end_data = data_file.tell()
+            data_size = end_data - start_data
+            data = resource.self._read_raw_data(data_file, data_size, False)
+            self.data = data
+
+    def _write_data(self, outfile, encrypt):
+        """ Assumes it's writing to a resource."""
+        # Object header
+        data = struct.pack("<H", self.obj_id)
+        if encrypt:
+            data = util.crypt(data, self.crypt_value)
+        outfile.write(data)
+        # Image data
+        self._write_raw_data(outfile, self.data, encrypt)
+
+    def _calculate_size(self):
+        # block header + header data + data size
+        return 6 + 1 + len(self.data)
+
+    def generate_xml_node(self, parent_node):
+        XMLHelper().write(self, parent_node, self.xml_structure)
 
 class BlockROV4(BlockRoom, BlockContainerV4): # also globally indexed
     def _init_class_data(self):
@@ -313,8 +367,7 @@ class BlockROV4(BlockRoom, BlockContainerV4): # also globally indexed
         self.object_code_type = "OC"
         self.num_scripts_type = "NL"
         self.script_container_class = ScriptBlockContainerV4
-        #self.object_container_class = ObjectBlockContainerV4
-        self.object_container_class = None
+        self.object_container_class = ObjectBlockContainerV4
 
 class BlockSOV4(BlockContainerV4, BlockGloballyIndexedV4):
     def generate_file_name(self):

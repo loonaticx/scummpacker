@@ -51,13 +51,11 @@ def parse_int_from_xml(in_str):
     else:
         return int(in_str)
 
-DEC = False
-HEX = True
-def output_int_to_xml(in_val, is_hex=DEC):
-    if is_hex:
-        return hex(in_val).rstrip('L')
-    else:
-        return str(in_val)
+def output_int_to_xml(in_val):
+    return str(in_val)
+
+def output_hex_to_xml(in_val):
+    return hex(in_val).rstrip('L')
 
 def discard_invalid_chars(in_str):
     return ''.join([c for c in in_str if c in __valid_file_chars])

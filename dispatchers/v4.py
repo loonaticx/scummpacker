@@ -31,9 +31,12 @@ class BlockDispatcherV4(AbstractBlockDispatcher):
         "SC" : blocks.BlockGloballyIndexedV4, # scripts
         "CO" : blocks.BlockGloballyIndexedV4, # costumes
 
+
         # Other blocks that should not use default block functionality
         "FO" : blocks.BlockFOV4, # file (room) offsets
         "LS" : blocks.BlockLSV4, # local scripts
+        "OI" : blocks.BlockOIV4, # object image
+        "OC" : blocks.BlockOCV4, # object code
 #        "HD" : None, # room header
 
     }
