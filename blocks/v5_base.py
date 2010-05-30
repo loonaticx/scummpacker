@@ -193,7 +193,7 @@ class BlockMIDISoundV5(BlockSoundV5):
         return array.array('B', self.MDHD_DEFAULT_DATA)
 
 
-class BlockIndexDirectoryV5(BlockDefaultV5):
+class BlockIndexDirectoryV5(BlockIndexDirectory, BlockDefaultV5):
     DIR_TYPES = {
         "DROO" : "ROOM",
         "DSCR" : "SCRP",
@@ -240,46 +240,3 @@ class BlockIndexDirectoryV5(BlockDefaultV5):
 
         for i, key in enumerate(zip(room_nums, offsets)):
             control.global_index_map.map_index(self.DIR_TYPES[self.name], key, i)
-
-    def save_to_file(self, path):
-        """This block is generated when saving to a resource."""
-        return
-
-    def save_to_resource(self, resource, room_start=0):
-        # is room_start required? nah, just there for interface compliance.
-        #for i, key in enumerate()
-        items = control.global_index_map.items(self.DIR_TYPES[self.name])
-        item_map = {}
-        if len(items) == 0:
-            logging.info("No indexes found for block type \"" + self.name + "\" - are there any files of this block type?")
-            num_items = self.MIN_ENTRIES[control.global_args.game][self.name]
-        else:
-            items.sort(cmp=lambda x, y: cmp(x[1], y[1])) # sort by resource number
-            # Need to pad items out, so take last entry's number as the number of items
-            num_items = items[-1][1]
-            if self.name in self.MIN_ENTRIES[control.global_args.game] and \
-               num_items < self.MIN_ENTRIES[control.global_args.game][self.name]:
-                num_items = self.MIN_ENTRIES[control.global_args.game][self.name]
-            # Create map with reversed key/value pairs
-            for i, j in items:
-                item_map[j] = i
-
-        # Bleeech
-        self.size = 5 * num_items + 2 + self.block_name_length + 4
-        self._write_header(resource, True)
-
-        resource.write(util.int_to_str(num_items, 2, crypt_val=self.crypt_value))
-        for i in xrange(num_items):
-            if not i in item_map:
-                # write dummy values for unused item numbers.
-                resource.write(util.int_to_str(0, 1, crypt_val=self.crypt_value))
-            else:
-                room_num, _ = item_map[i]
-                resource.write(util.int_to_str(room_num, 1, crypt_val=self.crypt_value))
-        for i in xrange(num_items):
-            if not i in item_map:
-                # write dummy values for unused item numbers.
-                resource.write(util.int_to_str(0, 4, crypt_val=self.crypt_value))
-            else:
-                _, offset = item_map[i]
-                resource.write(util.int_to_str(offset, 4, crypt_val=self.crypt_value))

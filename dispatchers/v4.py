@@ -10,6 +10,7 @@ INDEXED_BLOCKS_V4 = (
     "SC", # scripts
     "CO", # cosutmes
     "SO", # sounds
+    "RN" # room names
 )
 
 class BlockDispatcherV4(AbstractBlockDispatcher):

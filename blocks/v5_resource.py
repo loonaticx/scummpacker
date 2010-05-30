@@ -106,8 +106,9 @@ class BlockLOFFV5(BlockDefaultV5):
                                       crypt_val=(self.crypt_value if decrypt else None))
             room_offset = util.str_to_int(resource.read(4),
                                       crypt_val=(self.crypt_value if decrypt else None))
+            lf_offset = room_offset - self.block_name_length - 4
 
-            control.global_index_map.map_index("LFLF", room_offset - self.block_name_length - 4, room_no)
+            control.global_index_map.map_index("LFLF", lf_offset, room_no)
             control.global_index_map.map_index("ROOM", room_no, room_offset) # HACK
 
     def save_to_file(self, path):

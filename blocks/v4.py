@@ -21,6 +21,15 @@ def __test_unpack():
     control.unknown_blocks_counter = control.IndexCounter(*dispatchers.INDEXED_BLOCKS_V4)
     control.global_index_map = control.IndexMappingContainer(*dispatchers.INDEXED_BLOCKS_V4)
 
+    logging.debug("Reading from indexes...")
+    dirfile = file("000.LFL", "rb")
+    dir_block = dispatchers.IndexBlockContainerV4()
+    dir_block.load_from_resource(dirfile)
+    dirfile.close()
+
+    dir_block.save_to_file(outpath)
+    
+    
     logging.debug("Reading from resources...")
     control.block_dispatcher = dispatchers.BlockDispatcherV4()
     resfile = file("DISK01.LEC", "rb")

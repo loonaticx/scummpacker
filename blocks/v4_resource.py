@@ -22,9 +22,16 @@ class BlockFOV4(BlockDefaultV4):
             lf_offset = util.str_to_int(resource.read(4),
                                       crypt_val=(self.crypt_value if decrypt else None))
 
+            room_offset = lf_offset + 2 + self.block_name_length + 4 # add 2 bytes for the room number/index of LF block. 
             control.global_index_map.map_index("LF", lf_offset, room_no)
-            control.global_index_map.map_index("RO", lf_offset + self.block_name_length + 4, lf_offset) # HACK
-        print control.global_index_map.items("LF")
+            control.global_index_map.map_index("RO", room_no, room_offset) # HACK
+            # I originally wrote the below mapping, but I'm not sure why...
+            #control.global_index_map.map_index("LF", lf_offset, room_no)
+            #control.global_index_map.map_index("RO", lf_offset + self.block_name_length + 4, lf_offset) # HACK
+        logging.debug("LF")
+        logging.debug(control.global_index_map.items("LF"))
+        logging.debug("RO")
+        logging.debug(control.global_index_map.items("RO"))
 
     def save_to_file(self, path):
         """Don't need to save offsets since they're calculated when packing."""
@@ -68,9 +75,9 @@ class BlockLFV4(BlockLucasartsFile, BlockContainerV4, BlockGloballyIndexedV4):
     def _read_data(self, resource, start, decrypt):
         """LF blocks store the room number before any child blocks.
 
-        Also, first LF file seems to store (junk?) data after the last child block, at least
+        Also, first LF file seems to sometimes store (junk?) data after the last child block, at least
         for LOOM CD and Monkey Island 1."""
-        logging.debug("Reading children from container block...")
+        logging.debug("Reading LF's children from container block...")
         # NOTE: although we read index in here, it gets overridden in load_from_resource.
         self.index = util.str_to_int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
         super(BlockLFV4, self)._read_data(resource, start, decrypt)
@@ -307,4 +314,4 @@ class ScriptBlockContainerV4(ScriptBlockContainer):
     entry_script_name = "EN"
     exit_script_name = "EX"
     lf_name = "LF"
-    num_local_name = "NL"
+    num_local_name = "LC" # I used to have this as NL, not sure why.

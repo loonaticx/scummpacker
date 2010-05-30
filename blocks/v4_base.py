@@ -90,6 +90,37 @@ class BlockContainerV4(BlockContainer, BlockDefaultV4):
             self.append(block)
             
 
-class BlockIndexDirectoryV4():
+class BlockIndexDirectoryV4(BlockIndexDirectory, BlockDefaultV4):
     """ Generic index directory """
-    pass
+    DIR_TYPES = {
+        "0R" : "RO",
+        "0S" : "SC",
+        "0N" : "SO",
+        "0C" : "CO",
+        #"0O" : "OB" # handled specifically.
+    }
+    MIN_ENTRIES = {
+        "LOOMCD" : {
+            "0S" : 199, # TODO: found out right values
+            "0N" : 150, # TODO: found out right values
+            "0C" : 150  # TODO: found out right values
+        }
+    }
+
+    def _read_data(self, resource, start, decrypt):
+        num_items = util.str_to_int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
+        room_nums = []
+        offsets = []
+        i = num_items
+        while i > 0:
+            room_no = util.str_to_int(resource.read(1), crypt_val=(self.crypt_value if decrypt else None))
+            room_nums.append(room_no)
+            offset = util.str_to_int(resource.read(4), crypt_val=(self.crypt_value if decrypt else None))
+            offsets.append(offset)
+            i -= 1
+
+        for i, key in enumerate(zip(room_nums, offsets)):
+            control.global_index_map.map_index(self.DIR_TYPES[self.name], key, i)
+        
+        logging.debug("Index for : %s" % self.name)
+        logging.debug(control.global_index_map.items(self.DIR_TYPES[self.name]))
