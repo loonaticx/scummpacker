@@ -1,6 +1,7 @@
 #! /usr/bin/python
 # Stores globals
 import os.path
+import logging
 from optparse import OptionParser
 import scummpacker_util as util
 
@@ -41,6 +42,7 @@ class IndexMappingContainer(object):
             raise util.ScummPackerException("Unrecognised block \"" 
                                             + str(map_name) 
                                             + "\" tried to store a global index.")
+        #logging.debug("Setting %s index : %s / %s" % (map_name, key, index))
         self.index_map[map_name][key] = index
         
     def get_index(self, map_name, key):

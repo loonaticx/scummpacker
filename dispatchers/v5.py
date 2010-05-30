@@ -124,7 +124,7 @@ class FileDispatcherV5(AbstractFileDispatcher):
     DEFAULT_BLOCK = blocks.BlockDefaultV5
     ROOT_BLOCK = blocks.BlockLECFV5
 
-class IndexBlockContainerV5(AbstractBlockDispatcher):
+class IndexBlockContainerV5(AbstractIndexDispatcher):
     """Resource.000 processor; just maps blocks to Python objects (POPOs?)."""
     CRYPT_VALUE = 0x69
     BLOCK_NAME_LENGTH = 4
@@ -140,25 +140,6 @@ class IndexBlockContainerV5(AbstractBlockDispatcher):
     }
     REGEX_BLOCKS = []
     DEFAULT_BLOCK = blocks.BlockDefaultV5
-
-    def dispatch_and_load_from_resource(self, resource, room_start=0):
-        self.load_from_resource(resource, room_start)
-        return self
-
-    def load_from_resource(self, resource, room_start=0):
-        self.children = []
-        for i in xrange(len(self.BLOCK_MAP.keys())):
-            block = self.dispatch_next_block(resource)
-            block.load_from_resource(resource)
-            self.children.append(block)
-
-    def save_to_file(self, path):
-        for c in self.children:
-            c.save_to_file(path)
-
-    def dispatch_and_load_from_file(self, path):
-        self.load_from_file(path)
-        return self
 
     def load_from_file(self, path):
         self.children = []
@@ -192,7 +173,3 @@ class IndexBlockContainerV5(AbstractBlockDispatcher):
         dobj_block.load_from_file(os.path.join(path, "dobj.xml"))
         self.children.append(dobj_block)
 
-    def save_to_resource(self, resource, room_start=0):
-        for c in self.children:
-            logging.debug("Saving index: " + c.name)
-            c.save_to_resource(resource, room_start)

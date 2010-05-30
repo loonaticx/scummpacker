@@ -59,3 +59,31 @@ class AbstractFileDispatcher(AbstractBlockDispatcher):
                 return None
         block = block_type(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
         return block
+    
+class AbstractIndexDispatcher(AbstractBlockDispatcher):
+    def dispatch_and_load_from_resource(self, resource, room_start=0):
+        self.load_from_resource(resource, room_start)
+        return self
+
+    def load_from_resource(self, resource, room_start=0):
+        self.children = []
+        for _ in xrange(len(self.BLOCK_MAP)):
+            block = self.dispatch_next_block(resource)
+            block.load_from_resource(resource)
+            self.children.append(block)
+
+    def save_to_file(self, path):
+        for c in self.children:
+            c.save_to_file(path)
+
+    def dispatch_and_load_from_file(self, path):
+        self.load_from_file(path)
+        return self
+
+    def load_from_file(self, path):
+        raise NotImplementedError("This method must be overridden by an implementing class.")
+
+    def save_to_resource(self, resource, room_start=0):
+        for c in self.children:
+            logging.debug("Saving index: " + c.name)
+            c.save_to_resource(resource, room_start)

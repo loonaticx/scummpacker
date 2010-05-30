@@ -53,3 +53,50 @@ class BlockDispatcherV4(AbstractBlockDispatcher):
         resource.seek(-self.BLOCK_NAME_LENGTH, os.SEEK_CUR)
         resource.seek(-4, os.SEEK_CUR)
         return bname
+
+class IndexBlockContainerV4(AbstractIndexDispatcher):
+    CRYPT_VALUE = None # V3-4 indexes aren't encrypted
+    BLOCK_NAME_LENGTH = 2
+    BLOCK_MAP = {
+        "RN" : blocks.BlockRNV4, # room names
+        "0R" : blocks.Block0RV4, # rooms
+        "0S" : blocks.BlockIndexDirectoryV4, # scripts
+        "0N" : blocks.BlockIndexDirectoryV4, # sounds (noises)
+        "0C" : blocks.BlockIndexDirectoryV4, # costumes
+        "0O" : blocks.Block0OV4 # objects
+    }
+    REGEX_BLOCKS = []
+    DEFAULT_BLOCK = blocks.BlockDefaultV4
+    
+    def _read_block_name(self, resource):
+        """ SCUMM v3 and v4 stores block size before the block name."""
+        resource.seek(4, os.SEEK_CUR)
+        bname = resource.read(self.BLOCK_NAME_LENGTH)
+        resource.seek(-self.BLOCK_NAME_LENGTH, os.SEEK_CUR)
+        resource.seek(-4, os.SEEK_CUR)
+        return bname
+    
+    def load_from_file(self, path):
+        self.children = []
+
+        # Crappy crappy crap
+        # It's like this because blocks need to be in a specific order
+        rnam_block = blocks.BlockRN4(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
+        rnam_block.load_from_file(os.path.join(path, "roomnames.xml"))
+        self.children.append(rnam_block)
+
+        d_block = blocks.Block0RV5(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
+        self.children.append(d_block)
+        d_block = blocks.BlockIndexDirectoryV4(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
+        d_block.name = "0S"
+        self.children.append(d_block)
+        d_block = blocks.BlockIndexDirectoryV4(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
+        d_block.name = "0N"
+        self.children.append(d_block)
+        d_block = blocks.BlockIndexDirectoryV4(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
+        d_block.name = "0C"
+        self.children.append(d_block)
+
+        dobj_block = blocks.Block0OV4(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
+        dobj_block.load_from_file(os.path.join(path, "dobj.xml"))
+        self.children.append(dobj_block)

@@ -37,7 +37,7 @@ class AbstractBlock(object):
         name = resource.read(self.block_name_length)
         if decrypt:
             name = util.crypt(name, self.crypt_value)
-        logging.debug("Block name: " + str(name))
+        #logging.debug("Block name: " + str(name))
         return name
 
     def _read_size(self, resource, decrypt):
@@ -444,7 +444,7 @@ class BlockRoom(BlockContainer): # also globally indexed
         location = resource.tell()
         logging.debug("Saving room")
         room_num = control.global_index_map.get_index(self.lf_name, room_start)
-        control.global_index_map.map_index(self.lf_name, room_num, location)
+        control.global_index_map.map_index(self.name, room_num, location)
         super(BlockRoom, self).save_to_resource(resource, room_start)
 
 class ObjectBlockContainer(object):
