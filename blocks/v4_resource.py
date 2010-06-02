@@ -9,66 +9,17 @@ import scummpacker_util as util
 from common import *
 from v4_base import *
 
-class BlockFOV4(BlockDefaultV4):
+class BlockFOV4(BlockRoomOffsets, BlockDefaultV4):
     name = "FO"
+    LFLF_NAME = "LF"
+    ROOM_NAME = "RO"
+    OFFSET_POINTS_TO_ROOM = False
 
-    def _read_data(self, resource, start, decrypt):
-        num_rooms = util.str_to_int(resource.read(1),
-                                    crypt_val=(self.crypt_value if decrypt else None))
-
-        for _ in xrange(num_rooms):
-            room_no = util.str_to_int(resource.read(1),
-                                      crypt_val=(self.crypt_value if decrypt else None))
-            lf_offset = util.str_to_int(resource.read(4),
-                                      crypt_val=(self.crypt_value if decrypt else None))
-
-            room_offset = lf_offset + 2 + self.block_name_length + 4 # add 2 bytes for the room number/index of LF block. 
-            control.global_index_map.map_index("LF", lf_offset, room_no)
-            control.global_index_map.map_index("RO", room_no, room_offset) # HACK
-            # I originally wrote the below mapping, but I'm not sure why...
-            #control.global_index_map.map_index("LF", lf_offset, room_no)
-            #control.global_index_map.map_index("RO", lf_offset + self.block_name_length + 4, lf_offset) # HACK
-        logging.debug("LF")
-        logging.debug(control.global_index_map.items("LF"))
-        logging.debug("RO")
-        logging.debug(control.global_index_map.items("RO"))
-
-    def save_to_file(self, path):
-        """Don't need to save offsets since they're calculated when packing."""
-        return
-
-    def save_to_resource(self, resource, room_start=0):
-        """This method should only be called after write_dummy_block has been invoked,
-        otherwise this block may have no size attribute initialised."""
-        # Write name/size (probably again, since write_dummy_block also writes it)
-        self._write_header(resource, True)
-        # Write number of rooms, followed by offset table
-        # Possible inconsistency, in that this uses the global index map for ROOM blocks,
-        #  whereas the "write_dummy_block" just looks at the number passed in, which
-        #  comes from the number of entries in the file system.
-        room_table = sorted(control.global_index_map.items("RO"))
-        num_of_rooms = len(room_table)
-        resource.write(util.int_to_str(num_of_rooms, 1, util.LE, self.crypt_value))
-        for room_num, room_offset in room_table:
-            room_num = int(room_num)
-            resource.write(util.int_to_str(room_num, 1, util.LE, self.crypt_value))
-            resource.write(util.int_to_str(room_offset, 4, util.LE, self.crypt_value))
-
-    def write_dummy_block(self, resource, num_rooms):
-        """This method should be called before save_to_resource. It just
-        reserves space until the real block is written.
-
-        The reason for doing this is that the block begins at the start of the
-        resource file, but contains the offsets of all of the room blocks, which
-        won't be known until after they've all been written."""
-        block_start = resource.tell()
-        self._write_dummy_header(resource, True)
-        resource.write(util.int_to_str(num_rooms, 1, util.BE, self.crypt_value))
-        for _ in xrange(num_rooms):
-            resource.write("\x00" * 5)
-        block_end = resource.tell()
-        self.size = block_end - block_start
-
+class BlockLEV4(BlockLucasartsEntertainmentContainer, BlockContainerV4):
+    def _init_class_data(self):
+        self.name = "LE"
+        self.OFFSET_CLASS = BlockFOV4
+        
 class BlockLFV4(BlockLucasartsFile, BlockContainerV4, BlockGloballyIndexedV4):
     is_unknown = False
     
@@ -167,6 +118,7 @@ class BlockOCV4(BlockDefaultV4):
         # Shared
         self.obj_id = util.parse_int_from_xml(root.find("id").text)
         self.obj_name = root.find("name").text
+        self.obj_name = self.obj_name if self.obj_name != None else ""
 
         XMLHelper().read(self, root, self.xml_structure)
 
@@ -174,26 +126,31 @@ class BlockOCV4(BlockDefaultV4):
         with file(path, 'rb') as script_file:
             # Skip the header info, except name offset
             script_file.seek(6 + 12)
-            name_offset = script_file.read(1)
+            name_offset = ord(script_file.read(1))
             # read event table
-            event_table_size = (start + name_offset) - resource.tell()
-            data = resource.self._read_raw_data(script_file, event_table_size, False)
+            event_table_size = name_offset - script_file.tell()
+            data = self._read_raw_data(script_file, event_table_size, False)
             self.event_table = data
             # skip the object name
-            script_file.seek(len(self.obj_name) + 1, os.SEEK_CUR)
+            #script_file.seek(len(self.obj_name) + 1, os.SEEK_CUR) # doesn't work because obj_name may be "None" if it's blank in the XML
+            while True:
+                c = script_file.read(1)
+                if c == "\x00":
+                    break
             # read script data
             start_script = script_file.tell()
-            start_script.seek(0, os.SEEK_END)
+            script_file.seek(0, os.SEEK_END)
             end_script = script_file.tell()
             script_size = end_script - start_script
-            data = resource.self._read_raw_data(script_file, script_size, False)
+            script_file.seek(start_script, os.SEEK_SET)
+            data = self._read_raw_data(script_file, script_size, False)
             self.script_data = data
 
     def _write_data(self, outfile, encrypt):
         """ Assumes it's writing to a resource."""
         # TODO: validate values fit into clamped?
         y_and_parent_state = (self.parent_state & 0x80) | (self.y & 0x7F)
-        height_and_actor_dir = (self.height & 0xF8) | (self.actor_dir & 0x07)
+        height_and_actor_dir = (self.height & 0xF8) | (self.height & 0x07)
 
         name_offset = 6 + 13 + len(self.event_table)
 
@@ -253,10 +210,12 @@ class BlockOIV4(BlockDefaultV4):
             data_file.seek(6 + 2)
             # read script data
             start_data = data_file.tell()
-            start_data.seek(0, os.SEEK_END)
+            data_file.seek(0, os.SEEK_END)
             end_data = data_file.tell()
             data_size = end_data - start_data
-            data = resource.self._read_raw_data(data_file, data_size, False)
+            data_file.seek(start_data, os.SEEK_SET)
+            logging.debug("Attempting to load %s. start_data = %s. end_data = %s. data_size = %s" % (path, start_data, end_data, data_size))
+            data = self._read_raw_data(data_file, data_size, False)
             self.data = data
 
     def _write_data(self, outfile, encrypt):
@@ -292,6 +251,32 @@ class BlockROV4(BlockRoom, BlockContainerV4): # also globally indexed
         self.object_container_class = ObjectBlockContainerV4
 
 class BlockSOV4(BlockContainerV4, BlockGloballyIndexedV4):
+    name = "SO"
+
+    def save_to_resource(self, resource, room_start=0):
+        location = resource.tell()
+        room_num = control.global_index_map.get_index("LF", room_start)
+        room_offset = control.global_index_map.get_index("RO", room_num)
+        control.global_index_map.map_index(self.name,
+                                           (room_num, location - room_offset),
+                                           self.index)
+        super(BlockSOV4, self).save_to_resource(resource, room_start)
+    
+    def load_from_file(self, path):
+        name = os.path.split(path)[1]
+        self.is_cd_track = False
+        self.name = name.split('_')[0]
+        self.index = int(name.split('_')[1])
+        self.children = []
+
+        file_list = os.listdir(path)
+
+        for f in file_list:
+            b = control.file_dispatcher.dispatch_next_block(f)
+            if b != None:
+                b.load_from_file(os.path.join(path, f))
+                self.append(b)    
+    
     def generate_file_name(self):
         name = (self.name
                 + "_"

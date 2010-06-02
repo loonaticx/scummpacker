@@ -20,5 +20,5 @@ class Block0RV4(BlockRoomIndexes, BlockDefaultV4):
     }
     
 class Block0OV4(BlockObjectIndexes, BlockDefaultV4):
-    name = "0R"
+    name = "0O"
     HAS_OBJECT_CLASS_DATA = False

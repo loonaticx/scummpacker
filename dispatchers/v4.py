@@ -1,6 +1,6 @@
 #! /usr/bin/python
 import os
-#import re
+import re
 import blocks
 from common import *
 
@@ -55,6 +55,59 @@ class BlockDispatcherV4(AbstractBlockDispatcher):
         resource.seek(-4, os.SEEK_CUR)
         return bname
 
+class FileDispatcherV4(AbstractFileDispatcher):
+    CRYPT_VALUE = 0x69
+    BLOCK_NAME_LENGTH = 2
+    BLOCK_MAP = {
+        # Root
+        r"LE" : blocks.BlockLEV4,
+        # LECF
+        # -LFLF
+        r"RO" : blocks.BlockROV4,
+        # --ROOM
+        r"BM.dmp" : blocks.BlockDefaultV4,
+        r"BX.dmp" : blocks.BlockDefaultV4,
+        r"CC.dmp" : blocks.BlockDefaultV4,
+        r"HD.dmp" : blocks.BlockDefaultV4, # TODO
+        #r"RMHD.xml" : blocks.BlockRMHDV4, # TODO
+        #r"LC.dmp" : blocks.BlockDefaultV4, # ignored
+        r"PA.dmp" : blocks.BlockDefaultV4,
+        r"SA.dmp" : blocks.BlockDefaultV4,
+        r"SL.dmp" : blocks.BlockDefaultV4,
+        r"SP.dmp" : blocks.BlockDefaultV4,
+        r"objects" : blocks.ObjectBlockContainerV4,
+        r"scripts" : blocks.ScriptBlockContainerV4,
+        # ---objects (incl. subdirs)
+        r"OC.dmp" : blocks.BlockDefaultV4,
+        r"OI.dmp" : blocks.BlockDefaultV4,
+        # ---scripts
+        r"EN.dmp" : blocks.BlockDefaultV4,
+        r"EX.dmp" : blocks.BlockDefaultV4,
+        # - Sound blocks
+        r"AD.dmp" : blocks.BlockDefaultV4,
+        r"WA.dmp" : blocks.BlockDefaultV4,
+
+    }
+    REGEX_BLOCKS = [
+        # LECF
+        (re.compile(r"LF_[0-9]{3}.*"), blocks.BlockLFV4),
+        # -LFLF
+        (re.compile(r"SO_[0-9]{3}"), blocks.BlockSOV4),
+        #(re.compile(r"CHAR_[0-9]{3}"), blocks.BlockGloballyIndexedV4),
+        (re.compile(r"CO_[0-9]{3}"), blocks.BlockGloballyIndexedV4),
+        (re.compile(r"SC_[0-9]{3}"), blocks.BlockGloballyIndexedV4),
+        # --ROOM
+        # --scripts
+        (re.compile(r"LS_[0-9]{3}\.dmp"), blocks.BlockLSV4)
+    ]
+    IGNORED_BLOCKS = frozenset([
+        r"OBHD.xml",
+        r"LC.dmp",
+        r"order.xml"
+    ])
+    DEFAULT_BLOCK = blocks.BlockDefaultV4
+    ROOT_BLOCK = blocks.BlockLEV4    
+    
 class IndexBlockContainerV4(AbstractIndexDispatcher):
     CRYPT_VALUE = None # V3-4 indexes aren't encrypted
     BLOCK_NAME_LENGTH = 2
@@ -82,11 +135,11 @@ class IndexBlockContainerV4(AbstractIndexDispatcher):
 
         # Crappy crappy crap
         # It's like this because blocks need to be in a specific order
-        rnam_block = blocks.BlockRN4(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
+        rnam_block = blocks.BlockRNV4(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
         rnam_block.load_from_file(os.path.join(path, "roomnames.xml"))
         self.children.append(rnam_block)
 
-        d_block = blocks.Block0RV5(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
+        d_block = blocks.Block0RV4(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
         self.children.append(d_block)
         d_block = blocks.BlockIndexDirectoryV4(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
         d_block.name = "0S"

@@ -116,6 +116,7 @@ class BlockContainer(AbstractBlock):
 
     def _find_block_rank(self, block):
         rank_lookup_name = self._find_block_rank_lookup_name(block)
+        logging.debug("Ordering block: %s" % (rank_lookup_name))
         block_rank = self.block_ordering.index(rank_lookup_name) # requires all block types are listed
         return block_rank
 
@@ -333,6 +334,53 @@ class BlockLocalScript(AbstractBlock):
     def generate_file_name(self):
         return self.name + "_" + str(self.script_id).zfill(3) + ".dmp"
 
+class BlockLucasartsEntertainmentContainer(BlockContainer):
+    def __init__(self, *args, **kwds):
+        super(BlockLucasartsEntertainmentContainer, self).__init__(*args, **kwds)
+        self._init_class_data()
+
+    def _init_class_data(self):
+        self.name = NotImplementedError("This property must be overridden by inheriting classes.")
+        self.OFFSET_CLASS = NotImplementedError("This property must be overridden by inheriting classes.")
+    
+    def load_from_file(self, path):
+        # assume input path is actually the directory containing the LECF dir
+        super(BlockLucasartsEntertainmentContainer, self).load_from_file(os.path.join(path, self.name))
+
+    def save_to_resource(self, resource, room_start=0):
+        start = resource.tell()
+
+        # write dummy header
+        self._write_dummy_header(resource, True)
+
+        # write dummy LOFF
+        loff_start = resource.tell()
+        loff_block = self.OFFSET_CLASS(self.block_name_length, self.crypt_value)
+        num_rooms = len(self.children)
+        loff_block.write_dummy_block(resource, num_rooms)
+
+        # process children
+        for c in self.children:
+            #if hasattr(c, 'index'):
+            #    logging.debug("object " + str(c) + " has index " + str(c.index))
+            #logging.debug("location: " + str(resource.tell()))
+            c.save_to_resource(resource, room_start)
+
+        # go back and write size of LECF block (i.e. the whole ".001" file)
+        self.size = resource.tell() - start
+        resource.flush()
+        end = resource.tell()
+        resource.seek(start, os.SEEK_SET)
+        self._write_header(resource, True)
+
+        # go back and write the LOFF block
+        loff_block.save_to_resource(resource, room_start)
+        resource.seek(end, os.SEEK_SET)
+
+    def __repr__(self):
+        childstr = [str(c) for c in self.children]
+        return "[" + self.name + ", " + ", \n".join(childstr) + "]"
+    
 class BlockLucasartsFile(BlockContainer, BlockGloballyIndexed):
     """ Anything inheriting from this class should also inherit from the concrete versions
     of BlockContainer and BlockGloballyIndexed."""
@@ -394,6 +442,66 @@ class BlockLucasartsFile(BlockContainer, BlockGloballyIndexed):
                 + ", ".join(childstr)
                 + "]")
 
+class BlockRoomOffsets(AbstractBlock):
+    name = NotImplementedError("This property must be overridden by inheriting classes.") # string
+    LFLF_NAME = NotImplementedError("This property must be overridden by inheriting classes.") # class name
+    ROOM_NAME = NotImplementedError("This property must be overridden by inheriting classes.") # class name
+    OFFSET_POINTS_TO_ROOM = NotImplementedError("This property must be overridden by inheriting classes.") # boolean
+
+    def _read_data(self, resource, start, decrypt):
+        num_rooms = util.str_to_int(resource.read(1),
+                                    crypt_val=(self.crypt_value if decrypt else None))
+
+        for _ in xrange(num_rooms):
+            room_no = util.str_to_int(resource.read(1),
+                                      crypt_val=(self.crypt_value if decrypt else None))
+            if self.OFFSET_POINTS_TO_ROOM:
+                room_offset = util.str_to_int(resource.read(4),
+                                              crypt_val=(self.crypt_value if decrypt else None))
+                lf_offset = room_offset - self.block_name_length - 4
+            else:
+                lf_offset = util.str_to_int(resource.read(4),
+                                            crypt_val=(self.crypt_value if decrypt else None))
+                room_offset = lf_offset + 2 + self.block_name_length + 4 # add 2 bytes for the room number/index of LF block. 
+            control.global_index_map.map_index(self.LFLF_NAME, lf_offset, room_no)
+            control.global_index_map.map_index(self.ROOM_NAME, room_no, room_offset) # HACK
+
+    def save_to_file(self, path):
+        """Don't need to save offsets since they're calculated when packing."""
+        return
+
+    def save_to_resource(self, resource, room_start=0):
+        """This method should only be called after write_dummy_block has been invoked,
+        otherwise this block may have no size attribute initialised."""
+        # Write name/size (probably again, since write_dummy_block also writes it)
+        self._write_header(resource, True)
+        # Write number of rooms, followed by offset table
+        # Possible inconsistency, in that this uses the global index map for ROOM blocks,
+        #  whereas the "write_dummy_block" just looks at the number passed in, which
+        #  comes from the number of entries in the file system.
+        room_table = sorted(control.global_index_map.items(self.ROOM_NAME))
+        num_of_rooms = len(room_table)
+        resource.write(util.int_to_str(num_of_rooms, 1, util.LE, self.crypt_value))
+        for room_num, room_offset in room_table:
+            room_num = int(room_num)
+            resource.write(util.int_to_str(room_num, 1, util.LE, self.crypt_value))
+            resource.write(util.int_to_str(room_offset, 4, util.LE, self.crypt_value))
+
+    def write_dummy_block(self, resource, num_rooms):
+        """This method should be called before save_to_resource. It just
+        reserves space until the real block is written.
+
+        The reason for doing this is that the block begins at the start of the
+        resource file, but contains the offsets of all of the room blocks, which
+        won't be known until after they've all been written."""
+        block_start = resource.tell()
+        self._write_dummy_header(resource, True)
+        resource.write(util.int_to_str(num_rooms, 1, util.BE, self.crypt_value))
+        for _ in xrange(num_rooms):
+            resource.write("\x00" * 5)
+        block_end = resource.tell()
+        self.size = block_end - block_start
+    
 class BlockRoom(BlockContainer): # also globally indexed
     def __init__(self, *args, **kwds):
         super(BlockRoom, self).__init__(*args, **kwds)
@@ -443,7 +551,7 @@ class BlockRoom(BlockContainer): # also globally indexed
 class BlockIndexDirectory(AbstractBlock):
     """ Generic index directory """
     DIR_TYPES = NotImplementedError("This property must be overridden by inheriting classes.")
-    MIN_ENTRIES = NotImplementedError("This method must be overridden by inheriting classes.")
+    MIN_ENTRIES = NotImplementedError("This property must be overridden by inheriting classes.")
 
     def _read_data(self, resource, start, decrypt):
         raise NotImplementedError("This method must be overridden by inheriting classes.")
@@ -557,12 +665,16 @@ class BlockObjectIndexes(AbstractBlock):
         self._write_header(resource, True)
 
         resource.write(util.int_to_str(num_items, 2, crypt_val=self.crypt_value))
-        for owner, state, _ in self.objects:
-            combined_val = ((owner & 0x0F) << 4) | (state & 0x0F)
-            resource.write(util.int_to_str(combined_val, 1, crypt_val=self.crypt_value))
         if self.HAS_OBJECT_CLASS_DATA:
+            for owner, state, _ in self.objects:
+                combined_val = ((owner & 0x0F) << 4) | (state & 0x0F)
+                resource.write(util.int_to_str(combined_val, 1, crypt_val=self.crypt_value))
             for _, _, class_data in self.objects:
                 resource.write(util.int_to_str(class_data, 4, crypt_val=self.crypt_value))
+        else:
+            for owner, state, in self.objects:
+                combined_val = ((owner & 0x0F) << 4) | (state & 0x0F)
+                resource.write(util.int_to_str(combined_val, 1, crypt_val=self.crypt_value))
                 
 class BlockRoomIndexes(AbstractBlock):
     """Don't really seem to be used much for V5 and LOOM CD.
@@ -647,7 +759,7 @@ class BlockRoomNames(AbstractBlock):
             room_name = (room_name + ("\x00" * (self.name_length - len(room_name)))
                 if len(room_name) < self.name_length
                 else room_name[:self.name_length])
-            resource.write(util.crypt(room_name, self.crypt_value ^ 0xFF))
+            resource.write(util.crypt(room_name, self.crypt_value ^ 0xFF if self.crypt_value else 0xFF))
         resource.write(util.int_to_str(0, 1, crypt_val=self.crypt_value))        
                 
 class ObjectBlockContainer(object):
@@ -880,7 +992,7 @@ class XMLHelper(object):
 
     def read(self, destination, parent_node, structure):
         for name, marshaller, attr in structure:
-            node = parent_node.find(parent_node, name)
+            node = parent_node.find(name)
             self.read_actions[marshaller](destination, node, attr)
 
     def _read_value_from_xml_node(self, destination, node, attr, marshaller):
