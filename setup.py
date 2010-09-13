@@ -10,13 +10,13 @@ opts = { 'py2exe': { 'includes':includes } }
 #print 'opts',opts
 
 setup(version = "0.0",
-      description = "Scummpacker v2 WIP",
-      name = "Scummpacker v2 WIP",
+      description = "Scummpacker v2",
+      name = "Scummpacker v2",
       author = "Laurence Dougal Myers",
       author_email = "jestarjokin@jestarjokin.net",
       console = [
         {
-            "script": "scummpacker_blocks.py",
+            "script": "scummpacker.py",
         }
       ],
       options=opts
