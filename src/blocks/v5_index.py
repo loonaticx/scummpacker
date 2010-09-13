@@ -39,15 +39,15 @@ class BlockMAXSV5(BlockDefaultV5):
     def save_to_file(self, path):
         root = et.Element("maximums")
 
-        et.SubElement(root, "variables").text = util.output_int_to_xml(self.num_vars)
-        et.SubElement(root, "unknown_1").text = util.output_int_to_xml(self.unknown_1)
-        et.SubElement(root, "bit_variables").text = util.output_int_to_xml(self.bit_vars)
-        et.SubElement(root, "local_objects").text = util.output_int_to_xml(self.local_objects)
-        et.SubElement(root, "unknown_2").text = util.output_int_to_xml(self.unknown_2)
-        et.SubElement(root, "character_sets").text = util.output_int_to_xml(self.char_sets)
-        et.SubElement(root, "unknown_3").text = util.output_int_to_xml(self.unknown_3)
-        et.SubElement(root, "unknown_4").text = util.output_int_to_xml(self.unknown_4)
-        et.SubElement(root, "inventory_objects").text = util.output_int_to_xml(self.inventory_objects)
+        et.SubElement(root, "variables").text = util.int2xml(self.num_vars)
+        et.SubElement(root, "unknown_1").text = util.int2xml(self.unknown_1)
+        et.SubElement(root, "bit_variables").text = util.int2xml(self.bit_vars)
+        et.SubElement(root, "local_objects").text = util.int2xml(self.local_objects)
+        et.SubElement(root, "unknown_2").text = util.int2xml(self.unknown_2)
+        et.SubElement(root, "character_sets").text = util.int2xml(self.char_sets)
+        et.SubElement(root, "unknown_3").text = util.int2xml(self.unknown_3)
+        et.SubElement(root, "unknown_4").text = util.int2xml(self.unknown_4)
+        et.SubElement(root, "inventory_objects").text = util.int2xml(self.inventory_objects)
 
         util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "maxs.xml"))
@@ -58,15 +58,15 @@ class BlockMAXSV5(BlockDefaultV5):
 
         self.size = 18 + self.block_name_length + 4
 
-        self.num_vars = util.parse_int_from_xml(root.find("variables").text)
-        self.unknown_1 = util.parse_int_from_xml(root.find("unknown_1").text)
-        self.bit_vars = util.parse_int_from_xml(root.find("bit_variables").text)
-        self.local_objects = util.parse_int_from_xml(root.find("local_objects").text)
-        self.unknown_2 = util.parse_int_from_xml(root.find("unknown_2").text)
-        self.char_sets = util.parse_int_from_xml(root.find("character_sets").text)
-        self.unknown_3 = util.parse_int_from_xml(root.find("unknown_3").text)
-        self.unknown_4 = util.parse_int_from_xml(root.find("unknown_4").text)
-        self.inventory_objects = util.parse_int_from_xml(root.find("inventory_objects").text)
+        self.num_vars = util.xml2int(root.find("variables").text)
+        self.unknown_1 = util.xml2int(root.find("unknown_1").text)
+        self.bit_vars = util.xml2int(root.find("bit_variables").text)
+        self.local_objects = util.xml2int(root.find("local_objects").text)
+        self.unknown_2 = util.xml2int(root.find("unknown_2").text)
+        self.char_sets = util.xml2int(root.find("character_sets").text)
+        self.unknown_3 = util.xml2int(root.find("unknown_3").text)
+        self.unknown_4 = util.xml2int(root.find("unknown_4").text)
+        self.inventory_objects = util.xml2int(root.find("inventory_objects").text)
 
     def _write_data(self, outfile, encrypt):
         """ Assumes it's writing to a resource."""

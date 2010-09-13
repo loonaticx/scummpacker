@@ -47,7 +47,7 @@ class BlockSBLV5(BlockSoundV5):
 
     def _write_auhd_header(self, outfile, encrypt):
         voc_size = self.size - 27 # ignore all header info for size
-        au_header = BlockSBLV5.AU_HEADER + util.int_to_str(voc_size, 4, util.BE, None)
+        au_header = BlockSBLV5.AU_HEADER + util.int2str(voc_size, 4, util.BE, None)
         au_header = (util.crypt(au_header, self.crypt_value if encrypt else None))
         outfile.write(au_header)
 
@@ -70,9 +70,9 @@ class BlockSBLV5(BlockSoundV5):
         voc_version = 0x010A
         voc_version_complement = (0x1234 + ~voc_version) & 0xFFFF
         header = (header_name
-                  + util.int_to_str(data_offset, num_bytes=2)
-                  + util.int_to_str(voc_version, num_bytes=2)
-                  + util.int_to_str(voc_version_complement, num_bytes=2))
+                  + util.int2str(data_offset, num_bytes=2)
+                  + util.int2str(voc_version, num_bytes=2)
+                  + util.int2str(voc_version_complement, num_bytes=2))
         header = (util.crypt(header, self.crypt_value) if encrypt else header)
         outfile.write(header)
 
@@ -154,19 +154,24 @@ class BlockOBIMV5(BlockContainerV5):
 
     def generate_xml_node(self, parent_node):
         """ Adds a new XML node to the given parent node."""
-        obim = et.SubElement(parent_node, "image")
-        et.SubElement(obim, "x").text = util.output_int_to_xml(self.imhd.x)
-        et.SubElement(obim, "y").text = util.output_int_to_xml(self.imhd.y)
-        et.SubElement(obim, "width").text = util.output_int_to_xml(self.imhd.width)
-        et.SubElement(obim, "height").text = util.output_int_to_xml(self.imhd.height)
-        et.SubElement(obim, "flags").text = util.output_hex_to_xml(self.imhd.flags)
-        et.SubElement(obim, "unknown").text = util.output_hex_to_xml(self.imhd.unknown)
-        et.SubElement(obim, "num_images").text = util.output_int_to_xml(self.imhd.num_imnn)
-        et.SubElement(obim, "num_zplanes").text = util.output_int_to_xml(self.imhd.num_zpnn)
+        self.imhd.generate_xml_node(parent_node)
 
 
 class BlockIMHDV5(BlockDefaultV5):
     name = "IMHD"
+    xml_structure = (
+        ("image", 'n', (
+            ("x", 'i', 'x'),
+            ("y", 'i', 'y'),
+            ("width", 'i', 'width'),
+            ("height", 'i', 'height'),
+            ("flags", 'h', 'flags'),
+            ("unknown", 'h', 'unknown'),
+            ("num_images", 'i', 'num_imnn'),
+            ("num_zplanes", 'i', 'num_zpnn')
+            )
+        ),
+    )
 
     def _read_data(self, resource, start, decrypt):
         """
@@ -209,21 +214,9 @@ class BlockIMHDV5(BlockDefaultV5):
         root = tree.getroot()
 
         # Shared
-        self.obj_id = util.parse_int_from_xml(root.find("id").text)
-
-        # OBIM
-        obim_node = root.find("image")
-
-        self.x = util.parse_int_from_xml(obim_node.find("x").text)
-        self.y = util.parse_int_from_xml(obim_node.find("y").text)
-        self.width = util.parse_int_from_xml(obim_node.find("width").text)
-        self.height = util.parse_int_from_xml(obim_node.find("height").text)
-        self.flags = util.parse_int_from_xml(obim_node.find("flags").text) # possibly wrong
-        self.unknown = util.parse_int_from_xml(obim_node.find("unknown").text)
-
-        self.num_imnn = util.parse_int_from_xml(obim_node.find("num_images").text)
-        self.num_zpnn = util.parse_int_from_xml(obim_node.find("num_zplanes").text)
-
+        self.obj_id = util.xml2int(root.find("id").text)
+        # Dump image stuff using XML structure
+        XMLHelper().read(self, root, self.xml_structure)
 
     def save_to_file(self, path):
         """ Combined OBHD.xml is saved in the ObjectBlockContainer."""
@@ -236,6 +229,9 @@ class BlockIMHDV5(BlockDefaultV5):
             data = util.crypt(data, self.crypt_value)
         outfile.write(data)
 
+    def generate_xml_node(self, parent_node):
+        """ Adds a new XML node to the given parent node."""
+        XMLHelper().write(self, parent_node, self.xml_structure)
 
 class BlockOBCDV5(BlockContainerV5):
     name = "OBCD"
@@ -295,16 +291,7 @@ class BlockOBCDV5(BlockContainerV5):
         return str(self.obj_id) + "_" + self.obj_name
 
     def generate_xml_node(self, parent_node):
-        obcd = et.SubElement(parent_node, "code")
-        et.SubElement(obcd, "x").text = util.output_int_to_xml(self.cdhd.x)
-        et.SubElement(obcd, "y").text = util.output_int_to_xml(self.cdhd.y)
-        et.SubElement(obcd, "width").text = util.output_int_to_xml(self.cdhd.width)
-        et.SubElement(obcd, "height").text = util.output_int_to_xml(self.cdhd.height)
-        et.SubElement(obcd, "flags").text = util.output_hex_to_xml(self.cdhd.flags)
-        et.SubElement(obcd, "parent").text = util.output_int_to_xml(self.cdhd.parent)
-        et.SubElement(obcd, "walk_x").text = util.output_int_to_xml(self.cdhd.walk_x)
-        et.SubElement(obcd, "walk_y").text = util.output_int_to_xml(self.cdhd.walk_y)
-        et.SubElement(obcd, "actor_dir").text = util.output_int_to_xml(self.cdhd.actor_dir)
+        self.cdhd.generate_xml_node(parent_node)
 
 class BlockOBNAV5(BlockDefaultV5):
     name = "OBNA"
@@ -337,9 +324,22 @@ class BlockOBNAV5(BlockDefaultV5):
             data = util.crypt(data, self.crypt_value)
         outfile.write(data)
 
-
 class BlockCDHDV5(BlockDefaultV5):
     name = "CDHD"
+    xml_structure = (
+        ("code", 'n', (
+            ("x", 'i', 'x'),
+            ("y", 'i', 'y'),
+            ("width", 'i', 'width'),
+            ("height", 'i', 'height'),
+            ("flags", 'h', 'flags'),
+            ("parent", 'i', 'parent'),
+            ("walk_x", 'i', 'walk_x'),
+            ("walk_y", 'i', 'walk_y'),
+            ("actor_dir", 'i', 'actor_dir')
+            )
+        ),
+    )
 
     def _read_data(self, resource, start, decrypt):
         """
@@ -376,21 +376,10 @@ class BlockCDHDV5(BlockDefaultV5):
         root = tree.getroot()
 
         # Shared
-        obj_id = util.parse_int_from_xml(root.find("id").text)
+        obj_id = util.xml2int(root.find("id").text)
         self.obj_id = obj_id
 
-        # OBCD
-        obcd_node = root.find("code")
-        self.x = util.parse_int_from_xml(obcd_node.find("x").text)
-        self.y = util.parse_int_from_xml(obcd_node.find("y").text)
-        self.width = util.parse_int_from_xml(obcd_node.find("width").text)
-        self.height = util.parse_int_from_xml(obcd_node.find("height").text)
-
-        self.flags = util.parse_int_from_xml(obcd_node.find("flags").text)
-        self.parent = util.parse_int_from_xml(obcd_node.find("parent").text)
-        self.walk_x = util.parse_int_from_xml(obcd_node.find("walk_x").text)
-        self.walk_y = util.parse_int_from_xml(obcd_node.find("walk_y").text)
-        self.actor_dir = util.parse_int_from_xml(obcd_node.find("actor_dir").text)
+        XMLHelper().read(self, root, self.xml_structure)
 
     def _write_data(self, outfile, encrypt):
         """ Assumes it's writing to a resource."""
@@ -399,6 +388,9 @@ class BlockCDHDV5(BlockDefaultV5):
         if encrypt:
             data = util.crypt(data, self.crypt_value)
         outfile.write(data)
+
+    def generate_xml_node(self, parent_node):
+        XMLHelper().write(self, parent_node, self.xml_structure)
 
 
 class BlockRMHDV5(BlockDefaultV5):
@@ -430,16 +422,16 @@ class BlockRMHDV5(BlockDefaultV5):
         tree = et.parse(path)
         root = tree.getroot()
 
-        self.width = util.parse_int_from_xml(root.find("width").text)
-        self.height = util.parse_int_from_xml(root.find("height").text)
-        self.num_objects = util.parse_int_from_xml(root.find("num_objects").text)
+        self.width = util.xml2int(root.find("width").text)
+        self.height = util.xml2int(root.find("height").text)
+        self.num_objects = util.xml2int(root.find("num_objects").text)
 
     def save_to_file(self, path):
         root = et.Element("room")
 
-        et.SubElement(root, "width").text = util.output_int_to_xml(self.width)
-        et.SubElement(root, "height").text = util.output_int_to_xml(self.height)
-        et.SubElement(root, "num_objects").text = util.output_int_to_xml(self.num_objects)
+        et.SubElement(root, "width").text = util.int2xml(self.width)
+        et.SubElement(root, "height").text = util.int2xml(self.height)
+        et.SubElement(root, "num_objects").text = util.int2xml(self.num_objects)
 
         util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "RMHD.xml"))
@@ -480,12 +472,12 @@ class BlockRMIHV5(BlockDefaultV5):
         tree = et.parse(path)
         root = tree.getroot()
 
-        self.num_zbuffers = util.parse_int_from_xml(root.find("num_zbuffers").text)
+        self.num_zbuffers = util.xml2int(root.find("num_zbuffers").text)
 
     def save_to_file(self, path):
         root = et.Element("room_image")
 
-        et.SubElement(root, "num_zbuffers").text = util.output_int_to_xml(self.num_zbuffers)
+        et.SubElement(root, "num_zbuffers").text = util.int2xml(self.num_zbuffers)
 
         util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "RMIH.xml"))
@@ -515,7 +507,7 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
         # Not a great way of checking this, since we will try to interpret legit
         # block names as a number.
         # cd_block_size should always be 24 if it's CD track block.
-        cd_block_size = util.str_to_int(resource.read(4), crypt_val=(self.crypt_value if decrypt else None))
+        cd_block_size = util.str2int(resource.read(4), crypt_val=(self.crypt_value if decrypt else None))
         resource.seek(-4, os.SEEK_CUR) # rewind
         if cd_block_size == self.size - 8: # could just check if size == 32, but that might impact legit small blocks
             self.data = self._read_raw_data(resource, self.size - (resource.tell() - start), decrypt)

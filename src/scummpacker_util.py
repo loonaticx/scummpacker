@@ -22,7 +22,7 @@ def crypt(in_val, crypt_val):
 
 LE = False
 BE = True
-def str_to_int(in_val, is_BE=False, crypt_val=None):
+def str2int(in_val, is_BE=False, crypt_val=None):
     out_val = 0
     if crypt_val != None:
         in_val = crypt(in_val, crypt_val)
@@ -32,7 +32,7 @@ def str_to_int(in_val, is_BE=False, crypt_val=None):
         out_val += ord(c) << (i * 8)
     return out_val
 
-def int_to_str(in_val, num_bytes=4, is_BE=False, crypt_val=None):
+def int2str(in_val, num_bytes=4, is_BE=False, crypt_val=None):
     out_val = array.array('B')
     i = 0
     while i < num_bytes:
@@ -45,16 +45,16 @@ def int_to_str(in_val, num_bytes=4, is_BE=False, crypt_val=None):
         out_val = crypt(out_val, crypt_val)
     return out_val.tostring()
 
-def parse_int_from_xml(in_str):
+def xml2int(in_str):
     if in_str.startswith("0x"):
         return int(in_str, 16)
     else:
         return int(in_str)
 
-def output_int_to_xml(in_val):
+def int2xml(in_val):
     return str(in_val)
 
-def output_hex_to_xml(in_val):
+def hex2xml(in_val):
     return hex(in_val).rstrip('L')
 
 def discard_invalid_chars(in_str):

@@ -30,7 +30,7 @@ class BlockLFV4(BlockLucasartsFile, BlockContainerV4, BlockGloballyIndexedV4):
         for LOOM CD and Monkey Island 1."""
         logging.debug("Reading LF's children from container block...")
         # NOTE: although we read index in here, it gets overridden in load_from_resource.
-        self.index = util.str_to_int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
+        self.index = util.str2int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
         super(BlockLFV4, self)._read_data(resource, start, decrypt)
 
 class BlockLSV4(BlockLocalScript, BlockDefaultV4):
@@ -116,7 +116,7 @@ class BlockOCV4(BlockDefaultV4):
         root = tree.getroot()
 
         # Shared
-        self.obj_id = util.parse_int_from_xml(root.find("id").text)
+        self.obj_id = util.xml2int(root.find("id").text)
         self.obj_name = root.find("name").text
         self.obj_name = self.obj_name if self.obj_name != None else ""
 
@@ -202,7 +202,7 @@ class BlockOIV4(BlockDefaultV4):
         root = tree.getroot()
 
         # Shared
-        self.obj_id = util.parse_int_from_xml(root.find("id").text)
+        self.obj_id = util.xml2int(root.find("id").text)
 
     def _load_data_from_file(self, path):
         with file(path, 'rb') as data_file:

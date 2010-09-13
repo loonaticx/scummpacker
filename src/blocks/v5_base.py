@@ -17,14 +17,14 @@ class BlockDefaultV5(AbstractBlock):
     def _write_header(self, outfile, encrypt):
         name = util.crypt(self.name, self.crypt_value) if encrypt else self.name
         outfile.write(name)
-        size = util.int_to_str(self.size, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
+        size = util.int2str(self.size, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
         outfile.write(size)
 
     def _write_dummy_header(self, outfile, encrypt):
         """Writes placeholder information (block name, block size of 0)"""
         name = util.crypt(self.name, self.crypt_value) if encrypt else self.name
         outfile.write(name)
-        size = util.int_to_str(0, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
+        size = util.int2str(0, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
         outfile.write(size)
 
 class BlockSoundV5(BlockDefaultV5):
@@ -33,7 +33,7 @@ class BlockSoundV5(BlockDefaultV5):
         size = resource.read(4)
         if decrypt:
             size = util.crypt(size, self.crypt_value)
-        return util.str_to_int(size, is_BE=util.BE) + 8
+        return util.str2int(size, is_BE=util.BE) + 8
 
     def _write_header(self, outfile, encrypt):
         name = self.name
@@ -41,7 +41,7 @@ class BlockSoundV5(BlockDefaultV5):
             name = name + " "
         name = util.crypt(name, self.crypt_value) if encrypt else name
         outfile.write(name)
-        size = util.int_to_str(self.size - 8, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
+        size = util.int2str(self.size - 8, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
         outfile.write(size)
 
     def _write_dummy_header(self, outfile, encrypt):
@@ -51,7 +51,7 @@ class BlockSoundV5(BlockDefaultV5):
             name = name + " "
         name = util.crypt(name, self.crypt_value) if encrypt else name
         outfile.write(name)
-        size = util.int_to_str(0, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
+        size = util.int2str(0, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
         outfile.write(size)
 
     def generate_file_name(self):
@@ -183,7 +183,7 @@ class BlockMIDISoundV5(BlockSoundV5):
         name = util.crypt(name, self.crypt_value) if encrypt else name
         outfile.write(name)
         size = self.size + self.MDHD_SIZE # size includes MDHD header, does not include ADL/ROL block header
-        size = util.int_to_str(size, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
+        size = util.int2str(size, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
         outfile.write(size)
 
     def _write_mdhd_header(self, outfile, encrypt):
@@ -224,17 +224,17 @@ class BlockIndexDirectoryV5(BlockIndexDirectory, BlockDefaultV5):
     }
 
     def _read_data(self, resource, start, decrypt):
-        num_items = util.str_to_int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
+        num_items = util.str2int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
         room_nums = []
         i = num_items
         while i > 0:
-            room_no = util.str_to_int(resource.read(1), crypt_val=(self.crypt_value if decrypt else None))
+            room_no = util.str2int(resource.read(1), crypt_val=(self.crypt_value if decrypt else None))
             room_nums.append(room_no)
             i -= 1
         offsets = []
         i = num_items
         while i > 0:
-            offset = util.str_to_int(resource.read(4), crypt_val=(self.crypt_value if decrypt else None))
+            offset = util.str2int(resource.read(4), crypt_val=(self.crypt_value if decrypt else None))
             offsets.append(offset)
             i -= 1
 

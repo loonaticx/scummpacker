@@ -5,6 +5,7 @@ Bootstrap loader for unit tests. Run from the command line like so:
 """
 
 import logging
+import os
 import sys
 import unittest
 
@@ -12,10 +13,11 @@ def _do_specific_test(test_name):
     print "Starting tests for module: test." + test_name
     test_module = __import__("test." + test_name)
     unittest.main(test_module)
-    if hasattr(test_module, "perform_aux_tests"):
-        test_func = getattr(test_module, "perform_aux_tests")
-        test_func()
     print "Finished tests for module: " + test_name
+
+def _do_test_suite():
+    test_module = __import__("test")
+    unittest.main(test_module)
 
 def _start_tests():
     logging.basicConfig(format="", level=logging.DEBUG)
@@ -24,14 +26,10 @@ def _start_tests():
         for a in args:
             _do_specific_test(a)
     else:
-        logging.warning("No tests specified.")
-
-# TODO: not sure how to define comprehensive tests.
-def _test_suite():
-    return [
-        "base.animation",
-    ]
+        logging.info("No tests specified, running entire suite.")
+        _do_test_suite()
 
 if __name__ == "__main__":
-   _start_tests()
+    sys.path.append(os.path.join(os.getcwd(), "src"))
+    _start_tests()
 

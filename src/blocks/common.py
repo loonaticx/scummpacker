@@ -44,7 +44,7 @@ class AbstractBlock(object):
         size = resource.read(4)
         if decrypt:
             size = util.crypt(size, self.crypt_value)
-        return util.str_to_int(size, is_BE=util.BE)
+        return util.str2int(size, is_BE=util.BE)
 
     def _read_raw_data(self, resource, size, decrypt):
         data = array.array('B')
@@ -179,7 +179,7 @@ class BlockContainer(AbstractBlock):
                 ol_node = et.SubElement(root, "order-list")
                 ol_node.set("block-type", block_type)
                 curr_type = block_type
-            et.SubElement(ol_node, "order-entry").text = util.output_int_to_xml(c.index)
+            et.SubElement(ol_node, "order-entry").text = util.int2xml(c.index)
 
         if len(root.getchildren()) == 0:
             return
@@ -218,7 +218,7 @@ class BlockContainer(AbstractBlock):
             block_type = ol.get("block-type")
             order_list = []
             for o in ol.findall("order-entry"):
-                order_list.append(util.parse_int_from_xml(o.text))
+                order_list.append(util.xml2int(o.text))
             order_map[block_type] = order_list
 
         #logging.debug(str(order_map))
@@ -321,11 +321,11 @@ class BlockLocalScript(AbstractBlock):
         script_id = resource.read(1)
         if decrypt:
             script_id = util.crypt(script_id, self.crypt_value)
-        self.script_id = util.str_to_int(script_id)
+        self.script_id = util.str2int(script_id)
         self.data = self._read_raw_data(resource, self.size - (resource.tell() - start), decrypt)
 
     def _write_data(self, outfile, encrypt):
-        script_num = util.int_to_str(self.script_id, num_bytes=1)
+        script_num = util.int2str(self.script_id, num_bytes=1)
         if encrypt:
             script_num = util.crypt(script_num, self.crypt_value)
         outfile.write(script_num)
@@ -449,18 +449,18 @@ class BlockRoomOffsets(AbstractBlock):
     OFFSET_POINTS_TO_ROOM = NotImplementedError("This property must be overridden by inheriting classes.") # boolean
 
     def _read_data(self, resource, start, decrypt):
-        num_rooms = util.str_to_int(resource.read(1),
+        num_rooms = util.str2int(resource.read(1),
                                     crypt_val=(self.crypt_value if decrypt else None))
 
         for _ in xrange(num_rooms):
-            room_no = util.str_to_int(resource.read(1),
+            room_no = util.str2int(resource.read(1),
                                       crypt_val=(self.crypt_value if decrypt else None))
             if self.OFFSET_POINTS_TO_ROOM:
-                room_offset = util.str_to_int(resource.read(4),
+                room_offset = util.str2int(resource.read(4),
                                               crypt_val=(self.crypt_value if decrypt else None))
                 lf_offset = room_offset - self.block_name_length - 4
             else:
-                lf_offset = util.str_to_int(resource.read(4),
+                lf_offset = util.str2int(resource.read(4),
                                             crypt_val=(self.crypt_value if decrypt else None))
                 room_offset = lf_offset + 2 + self.block_name_length + 4 # add 2 bytes for the room number/index of LF block. 
             control.global_index_map.map_index(self.LFLF_NAME, lf_offset, room_no)
@@ -481,11 +481,11 @@ class BlockRoomOffsets(AbstractBlock):
         #  comes from the number of entries in the file system.
         room_table = sorted(control.global_index_map.items(self.ROOM_NAME))
         num_of_rooms = len(room_table)
-        resource.write(util.int_to_str(num_of_rooms, 1, util.LE, self.crypt_value))
+        resource.write(util.int2str(num_of_rooms, 1, util.LE, self.crypt_value))
         for room_num, room_offset in room_table:
             room_num = int(room_num)
-            resource.write(util.int_to_str(room_num, 1, util.LE, self.crypt_value))
-            resource.write(util.int_to_str(room_offset, 4, util.LE, self.crypt_value))
+            resource.write(util.int2str(room_num, 1, util.LE, self.crypt_value))
+            resource.write(util.int2str(room_offset, 4, util.LE, self.crypt_value))
 
     def write_dummy_block(self, resource, num_rooms):
         """This method should be called before save_to_resource. It just
@@ -496,7 +496,7 @@ class BlockRoomOffsets(AbstractBlock):
         won't be known until after they've all been written."""
         block_start = resource.tell()
         self._write_dummy_header(resource, True)
-        resource.write(util.int_to_str(num_rooms, 1, util.BE, self.crypt_value))
+        resource.write(util.int2str(num_rooms, 1, util.BE, self.crypt_value))
         for _ in xrange(num_rooms):
             resource.write("\x00" * 5)
         block_end = resource.tell()
@@ -583,39 +583,39 @@ class BlockIndexDirectory(AbstractBlock):
         self.size = 5 * num_items + 2 + self.block_name_length + 4
         self._write_header(resource, True)
 
-        resource.write(util.int_to_str(num_items, 2, crypt_val=self.crypt_value))
+        resource.write(util.int2str(num_items, 2, crypt_val=self.crypt_value))
         for i in xrange(num_items):
             if not i in item_map:
                 # write dummy values for unused item numbers.
-                resource.write(util.int_to_str(0, 1, crypt_val=self.crypt_value))
+                resource.write(util.int2str(0, 1, crypt_val=self.crypt_value))
             else:
                 room_num, _ = item_map[i]
-                resource.write(util.int_to_str(room_num, 1, crypt_val=self.crypt_value))
+                resource.write(util.int2str(room_num, 1, crypt_val=self.crypt_value))
         for i in xrange(num_items):
             if not i in item_map:
                 # write dummy values for unused item numbers.
-                resource.write(util.int_to_str(0, 4, crypt_val=self.crypt_value))
+                resource.write(util.int2str(0, 4, crypt_val=self.crypt_value))
             else:
                 _, offset = item_map[i]
-                resource.write(util.int_to_str(offset, 4, crypt_val=self.crypt_value))
+                resource.write(util.int2str(offset, 4, crypt_val=self.crypt_value))
 
 class BlockObjectIndexes(AbstractBlock):
     name = NotImplementedError("This property must be overridden by inheriting classes.")
     HAS_OBJECT_CLASS_DATA = NotImplementedError("This property must be overridden by inheriting classes.")
 
     def _read_data(self, resource, start, decrypt):
-        num_items = util.str_to_int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
+        num_items = util.str2int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
         self.objects = []
         # Write all owner+state values
         for _ in xrange(num_items):
-            owner_and_state = util.str_to_int(resource.read(1), crypt_val=(self.crypt_value if decrypt else None))
+            owner_and_state = util.str2int(resource.read(1), crypt_val=(self.crypt_value if decrypt else None))
             owner = (owner_and_state & 0xF0) >> 4
             state = owner_and_state & 0x0F
             self.objects.append([owner, state])
         # Write all class data values
         if self.HAS_OBJECT_CLASS_DATA:
             for i in xrange(num_items):
-                class_data = util.str_to_int(resource.read(4), crypt_val=(self.crypt_value if decrypt else None))
+                class_data = util.str2int(resource.read(4), crypt_val=(self.crypt_value if decrypt else None))
                 self.objects[i].append(class_data)
 
     def load_from_file(self, path):
@@ -626,10 +626,10 @@ class BlockObjectIndexes(AbstractBlock):
             obj_id = int(obj_node.find("id").text)
             if obj_id != obj_id == len(self.objects) + 1:
                 raise util.ScummPackerException("Entries in object ID XML must be in sorted order with no gaps in ID numbering.")
-            owner = util.parse_int_from_xml(obj_node.find("owner").text)
-            state = util.parse_int_from_xml(obj_node.find("state").text)
+            owner = util.xml2int(obj_node.find("owner").text)
+            state = util.xml2int(obj_node.find("state").text)
             if self.HAS_OBJECT_CLASS_DATA:
-                class_data = util.parse_int_from_xml(obj_node.find("class-data").text)
+                class_data = util.xml2int(obj_node.find("class-data").text)
                 self.objects.append([owner, state, class_data])
             else:
                 self.objects.append([owner, state])
@@ -643,11 +643,11 @@ class BlockObjectIndexes(AbstractBlock):
             else:
                 owner, state = self.objects[i]
             obj_node = et.SubElement(root, "object-entry")
-            et.SubElement(obj_node, "id").text = util.output_int_to_xml(i + 1)
-            et.SubElement(obj_node, "owner").text = util.output_int_to_xml(owner)
-            et.SubElement(obj_node, "state").text = util.output_int_to_xml(state)
+            et.SubElement(obj_node, "id").text = util.int2xml(i + 1)
+            et.SubElement(obj_node, "owner").text = util.int2xml(owner)
+            et.SubElement(obj_node, "state").text = util.int2xml(state)
             if self.HAS_OBJECT_CLASS_DATA:
-                et.SubElement(obj_node, "class-data").text = util.output_hex_to_xml(class_data)
+                et.SubElement(obj_node, "class-data").text = util.hex2xml(class_data)
 
         util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "dobj.xml"))
@@ -664,17 +664,17 @@ class BlockObjectIndexes(AbstractBlock):
         self.size = entry_size * num_items + 2 + self.block_name_length + 4
         self._write_header(resource, True)
 
-        resource.write(util.int_to_str(num_items, 2, crypt_val=self.crypt_value))
+        resource.write(util.int2str(num_items, 2, crypt_val=self.crypt_value))
         if self.HAS_OBJECT_CLASS_DATA:
             for owner, state, _ in self.objects:
                 combined_val = ((owner & 0x0F) << 4) | (state & 0x0F)
-                resource.write(util.int_to_str(combined_val, 1, crypt_val=self.crypt_value))
+                resource.write(util.int2str(combined_val, 1, crypt_val=self.crypt_value))
             for _, _, class_data in self.objects:
-                resource.write(util.int_to_str(class_data, 4, crypt_val=self.crypt_value))
+                resource.write(util.int2str(class_data, 4, crypt_val=self.crypt_value))
         else:
             for owner, state, in self.objects:
                 combined_val = ((owner & 0x0F) << 4) | (state & 0x0F)
-                resource.write(util.int_to_str(combined_val, 1, crypt_val=self.crypt_value))
+                resource.write(util.int2str(combined_val, 1, crypt_val=self.crypt_value))
                 
 class BlockRoomIndexes(AbstractBlock):
     """Don't really seem to be used much for V5 and LOOM CD.
@@ -700,11 +700,11 @@ class BlockRoomIndexes(AbstractBlock):
 #        room_offset = control.global_index_map.get_index("ROOM", room_num)
         self.size = 5 * self.padding_length + 2 + self.block_name_length + 4
         self._write_header(resource, True)
-        resource.write(util.int_to_str(self.padding_length, 2, crypt_val=self.crypt_value))
+        resource.write(util.int2str(self.padding_length, 2, crypt_val=self.crypt_value))
         for _ in xrange(self.padding_length): # this is "file/disk number" rather than "room number" in V4
-            resource.write(util.int_to_str(0, 1, crypt_val=self.crypt_value))
+            resource.write(util.int2str(0, 1, crypt_val=self.crypt_value))
         for _ in xrange(self.padding_length):
-            resource.write(util.int_to_str(0, 4, crypt_val=self.crypt_value))
+            resource.write(util.int2str(0, 4, crypt_val=self.crypt_value))
                 
 
 class BlockRoomNames(AbstractBlock):
@@ -715,7 +715,7 @@ class BlockRoomNames(AbstractBlock):
         end = start + self.size
         self.room_names = []
         while resource.tell() < end:
-            room_no = util.str_to_int(resource.read(1), crypt_val=(self.crypt_value if decrypt else None))
+            room_no = util.str2int(resource.read(1), crypt_val=(self.crypt_value if decrypt else None))
             if room_no == 0: # end of list marked by 0x00
                 break
             room_name = resource.read(self.name_length)
@@ -730,7 +730,7 @@ class BlockRoomNames(AbstractBlock):
 
         for room_no, room_name in self.room_names:
             room = et.SubElement(root, "room")
-            et.SubElement(room, "id").text = util.output_int_to_xml(room_no)
+            et.SubElement(room, "id").text = util.int2xml(room_no)
             et.SubElement(room, "name").text = util.escape_invalid_chars(room_name)
 
         util.indent_elementtree(root)
@@ -742,7 +742,7 @@ class BlockRoomNames(AbstractBlock):
 
         self.room_names = []
         for room in root.findall("room"):
-            room_no = util.parse_int_from_xml(room.find("id").text)
+            room_no = util.xml2int(room.find("id").text)
             room_name = room.find("name").text
             if room_name == None:
                 room_name = ''
@@ -754,13 +754,13 @@ class BlockRoomNames(AbstractBlock):
         self.size = 10 * len(self.room_names) + 1 + self.block_name_length + 4
         self._write_header(resource, True)
         for room_no, room_name in self.room_names:
-            resource.write(util.int_to_str(room_no, 1, crypt_val=self.crypt_value))
+            resource.write(util.int2str(room_no, 1, crypt_val=self.crypt_value))
             # pad/truncate room name to 8 characters
             room_name = (room_name + ("\x00" * (self.name_length - len(room_name)))
                 if len(room_name) < self.name_length
                 else room_name[:self.name_length])
             resource.write(util.crypt(room_name, self.crypt_value ^ 0xFF if self.crypt_value else 0xFF))
-        resource.write(util.int_to_str(0, 1, crypt_val=self.crypt_value))        
+        resource.write(util.int2str(0, 1, crypt_val=self.crypt_value))        
                 
 class ObjectBlockContainer(object):
     """ Contains objects, which contain image and code blocks."""
@@ -829,7 +829,7 @@ class ObjectBlockContainer(object):
 
         #shared = et.SubElement(root, "shared")
         et.SubElement(root, "name").text = util.escape_invalid_chars(objcode.obj_name)
-        et.SubElement(root, "id").text = util.output_int_to_xml(objcode.obj_id)
+        et.SubElement(root, "id").text = util.int2xml(objcode.obj_id)
 
         # OBIM
         objimage.generate_xml_node(root)
@@ -847,7 +847,7 @@ class ObjectBlockContainer(object):
             order_list_node = et.SubElement(root, "order-list")
             order_list_node.set("block-type", block_type)
             for o in order_list:
-                et.SubElement(order_list_node, "order-entry").text = util.output_int_to_xml(o)
+                et.SubElement(order_list_node, "order-entry").text = util.int2xml(o)
 
         util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "order.xml"))
@@ -889,7 +889,7 @@ class ObjectBlockContainer(object):
             for o in order_list.findall("order-entry"):
                 if not block_type in self.order_map:
                     self.order_map[block_type] = []
-                self.order_map[block_type].append(util.parse_int_from_xml(o.text))
+                self.order_map[block_type].append(util.xml2int(o.text))
 
             # Retain order of items loaded but not present in order.xml
             if block_type in loaded_order_map:
@@ -951,8 +951,8 @@ class ScriptBlockContainer(object):
         self.encd_script.save_to_resource(resource, room_start)
         # Generate and write "number of local scripts" block (could be prettier, should have its own class)
         resource.write(util.crypt(self.num_local_name, self.crypt_value))
-        resource.write(util.int_to_str(10, 4, util.BE, self.crypt_value)) # size of this block is always 10
-        resource.write(util.int_to_str(num_local_scripts, 2, util.LE, self.crypt_value))
+        resource.write(util.int2str(10, 4, util.BE, self.crypt_value)) # size of this block is always 10
+        resource.write(util.int2str(num_local_scripts, 2, util.LE, self.crypt_value))
         # Write all local scripts sorted by script number
         self.local_scripts.sort(cmp=lambda x,y: cmp(x.script_id, y.script_id))
         for s in self.local_scripts:
@@ -978,14 +978,14 @@ class ScriptBlockContainer(object):
 class XMLHelper(object):
     def __init__(self):
         self.read_actions = {
-            'i' : functools.partial(self._read_value_from_xml_node, marshaller=util.parse_int_from_xml), # int
-            'h' : functools.partial(self._read_value_from_xml_node, marshaller=util.parse_int_from_xml), # hex
+            'i' : functools.partial(self._read_value_from_xml_node, marshaller=util.xml2int), # int
+            'h' : functools.partial(self._read_value_from_xml_node, marshaller=util.xml2int), # hex
             's' : functools.partial(self._read_value_from_xml_node, marshaller=util.escape_invalid_chars), # string
             'n' : self.read # node
         }
         self.write_actions = {
-            'i' : functools.partial(self._write_value_to_xml_node, marshaller=util.output_int_to_xml), # int
-            'h' : functools.partial(self._write_value_to_xml_node, marshaller=util.output_hex_to_xml), # hex
+            'i' : functools.partial(self._write_value_to_xml_node, marshaller=util.int2xml), # int
+            'h' : functools.partial(self._write_value_to_xml_node, marshaller=util.hex2xml), # hex
             's' : functools.partial(self._write_value_to_xml_node, marshaller=util.unescape_invalid_chars), # string
             'n' : self.write # node
         }
@@ -996,11 +996,17 @@ class XMLHelper(object):
             self.read_actions[marshaller](destination, node, attr)
 
     def _read_value_from_xml_node(self, destination, node, attr, marshaller):
-        value = marshaller(node.text)
+        value = marshaller(node.text) # doesn't support "attributes" of nodes, just values
+        # Get nested attributes
+        attr_split = attr.split(".")
+        destination = reduce(lambda a1, a2: getattr(a1, a2), attr_split[:-1], destination)
+        attr = attr_split[-1]
         setattr(destination, attr, value)
 
     def _write_value_to_xml_node(self, caller, node, attr, marshaller):
-        node.text = marshaller(getattr(caller, attr))
+        # Get nested attributes
+        attr = reduce(lambda a1, a2: getattr(a1, a2), attr.split("."), caller)
+        node.text = marshaller(attr)
 
     def write(self, caller, parent_node, structure):
         for name, marshaller, attr in structure:

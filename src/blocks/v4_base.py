@@ -18,16 +18,16 @@ class BlockDefaultV4(AbstractBlock):
         size = resource.read(4)
         if decrypt:
             size = util.crypt(size, self.crypt_value)
-        return util.str_to_int(size, is_BE=util.LE)
+        return util.str2int(size, is_BE=util.LE)
 
     def _write_header(self, outfile, encrypt):
-        size = util.int_to_str(self.size, is_BE=util.LE, crypt_val=(self.crypt_value if encrypt else None))
+        size = util.int2str(self.size, is_BE=util.LE, crypt_val=(self.crypt_value if encrypt else None))
         outfile.write(size)
         outfile.write(self.name)
 
     def _write_dummy_header(self, outfile, encrypt):
         """Writes placeholder information (block name, block size of 0)"""
-        size = util.int_to_str(0, is_BE=util.LE, crypt_val=(self.crypt_value if encrypt else None))
+        size = util.int2str(0, is_BE=util.LE, crypt_val=(self.crypt_value if encrypt else None))
         outfile.write(size)
         outfile.write(self.name)
 
@@ -108,14 +108,14 @@ class BlockIndexDirectoryV4(BlockIndexDirectory, BlockDefaultV4):
     }
 
     def _read_data(self, resource, start, decrypt):
-        num_items = util.str_to_int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
+        num_items = util.str2int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
         room_nums = []
         offsets = []
         i = num_items
         while i > 0:
-            room_no = util.str_to_int(resource.read(1), crypt_val=(self.crypt_value if decrypt else None))
+            room_no = util.str2int(resource.read(1), crypt_val=(self.crypt_value if decrypt else None))
             room_nums.append(room_no)
-            offset = util.str_to_int(resource.read(4), crypt_val=(self.crypt_value if decrypt else None))
+            offset = util.str2int(resource.read(4), crypt_val=(self.crypt_value if decrypt else None))
             offsets.append(offset)
             i -= 1
 
