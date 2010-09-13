@@ -4,7 +4,7 @@ Laurence Dougal Myers <jestarjokin@jestarjokin.net>
 Doc v1.0, January 2010
 
 Introduction
-============
+------------
 ScummPacker is a tool to unpack and re-pack the game resources used in Lucsarts adventure games.
 
 Lucasarts games are usually identified by the engine version. The engine is usually referred to as SCUMM (Script Creation Utility for Maniac Mansion). Currently, ScummPacker only supports SCUMM v5 games - Monkey Island 1 CD, Monkey Island 2, and Indiana Jones and the Fate of Atlantis.
