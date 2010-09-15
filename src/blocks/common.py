@@ -9,6 +9,8 @@ import scummpacker_control as control
 import scummpacker_util as util
 
 class AbstractBlock(object):
+    xml_structure = tuple() # placeholder
+    
     def __init__(self, block_name_length, crypt_value, *args, **kwds):
         super(AbstractBlock, self).__init__(*args, **kwds)
         self.block_name_length = block_name_length
@@ -88,6 +90,14 @@ class AbstractBlock(object):
 
     def __repr__(self):
         return "[" + self.name + "]"
+
+    def generate_xml_node(self, parent_node):
+        """ Adds a new XML node to the given parent node."""
+        XMLHelper().write(self, parent_node, self.xml_structure)
+
+    def read_xml_node(self, parent_node):
+        """ Reads data from the given root node."""
+        XMLHelper().read(self, parent_node, self.xml_structure)
 
 class BlockContainer(AbstractBlock):
     block_ordering = [
