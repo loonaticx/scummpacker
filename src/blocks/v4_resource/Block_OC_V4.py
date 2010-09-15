@@ -1,4 +1,5 @@
 from __future__ import with_statement
+import os
 import struct
 import xml.etree.ElementTree as et
 import scummpacker_util as util

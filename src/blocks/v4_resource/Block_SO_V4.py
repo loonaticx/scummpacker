@@ -1,3 +1,4 @@
+import os
 import scummpacker_control as control
 from blocks.v4_base import BlockContainerV4, BlockGloballyIndexedV4
 

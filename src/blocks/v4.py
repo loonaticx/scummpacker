@@ -1,6 +1,7 @@
 #! /usr/bin/python
 from __future__ import with_statement
 import logging
+import os
 import scummpacker_control as control
 from common import *
 from v4_resource import *
@@ -23,7 +24,7 @@ def __test_unpack():
     control.global_index_map = control.IndexMappingContainer(*dispatchers.INDEXED_BLOCKS_V4)
 
     logging.debug("Reading from indexes...")
-    dirfile = file("000.LFL", "rb")
+    dirfile = file(os.path.join("..", "000.LFL"), "rb")
     dir_block = dispatchers.IndexBlockContainerV4()
     dir_block.load_from_resource(dirfile)
     dirfile.close()
@@ -33,7 +34,7 @@ def __test_unpack():
     
     logging.debug("Reading from resources...")
     control.block_dispatcher = dispatchers.BlockDispatcherV4()
-    resfile = file("DISK01.LEC", "rb")
+    resfile = file(os.path.join("..", "DISK01.LEC"), "rb")
     block = BlockContainerV4(2, 0x69)
     block.load_from_resource(resfile)
     resfile.close()

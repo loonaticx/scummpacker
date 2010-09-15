@@ -1,3 +1,4 @@
+import os
 import scummpacker_util as util
 from blocks.v5_base import BlockSoundV5
 

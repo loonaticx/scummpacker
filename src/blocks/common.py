@@ -491,10 +491,10 @@ class BlockRoomOffsets(AbstractBlock):
         #  comes from the number of entries in the file system.
         room_table = sorted(control.global_index_map.items(self.ROOM_NAME))
         num_of_rooms = len(room_table)
-        resource.write(util.int2str(num_of_rooms, 1, util.LE, self.crypt_value))
+        resource.write(util.int2str(num_of_rooms, 1, crypt_val=self.crypt_value))
         for room_num, room_offset in room_table:
             room_num = int(room_num)
-            resource.write(util.int2str(room_num, 1, util.LE, self.crypt_value))
+            resource.write(util.int2str(room_num, 1, crypt_val=self.crypt_value))
             resource.write(util.int2str(room_offset, 4, util.LE, self.crypt_value))
 
     def write_dummy_block(self, resource, num_rooms):
@@ -506,9 +506,9 @@ class BlockRoomOffsets(AbstractBlock):
         won't be known until after they've all been written."""
         block_start = resource.tell()
         self._write_dummy_header(resource, True)
-        resource.write(util.int2str(num_rooms, 1, util.BE, self.crypt_value))
+        resource.write(util.int2str(num_rooms, 1, crypt_val=self.crypt_value))
         for _ in xrange(num_rooms):
-            resource.write("\x00" * 5)
+            resource.write(util.int2str(0, 1, crypt_val=self.crypt_value) * 5)
         block_end = resource.tell()
         self.size = block_end - block_start
     

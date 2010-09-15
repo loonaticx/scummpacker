@@ -23,13 +23,15 @@ class BlockDefaultV4(AbstractBlock):
     def _write_header(self, outfile, encrypt):
         size = util.int2str(self.size, is_BE=util.LE, crypt_val=(self.crypt_value if encrypt else None))
         outfile.write(size)
-        outfile.write(self.name)
+        name = util.crypt(self.name, self.crypt_value) if encrypt else self.name
+        outfile.write(name)
 
     def _write_dummy_header(self, outfile, encrypt):
         """Writes placeholder information (block name, block size of 0)"""
         size = util.int2str(0, is_BE=util.LE, crypt_val=(self.crypt_value if encrypt else None))
         outfile.write(size)
-        outfile.write(self.name)
+        name = util.crypt(self.name, self.crypt_value) if encrypt else self.name
+        outfile.write(name)
 
 class BlockGloballyIndexedV4(BlockGloballyIndexed, BlockDefaultV4):
     lf_name = "LF"

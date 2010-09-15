@@ -1,3 +1,4 @@
+import os
 import scummpacker_util as util
 from blocks.v5_base import BlockContainerV5
 from Block_IMHD_V5 import BlockIMHDV5
