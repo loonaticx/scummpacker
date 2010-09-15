@@ -1,6 +1,7 @@
-import xml.etree.ElementTree as et
-import unittest
+import cStringIO as StringIO
 import os
+import unittest
+import xml.etree.ElementTree as et
 from blocks.v5_resource import *
 
 class BlockCDHDV5TestCase(unittest.TestCase):
@@ -8,6 +9,7 @@ class BlockCDHDV5TestCase(unittest.TestCase):
         self.block = BlockCDHDV5(4, 0x69)
 
     def populate_block(self):
+        self.block.obj_id = 1001
         self.block.x = 1
         self.block.y = 2
         self.block.width = 3
@@ -57,6 +59,61 @@ class BlockCDHDV5TestCase(unittest.TestCase):
         self.assertEqual(self.block.walk_x, 7)
         self.assertEqual(self.block.walk_y, 8)
         self.assertEqual(self.block.actor_dir, 9)
+        
+    def test_BlockCDHDV5_read_data(self):
+        """ Tests that values are mapped from a packed resource file into
+        the Block object."""
+        resource = StringIO.StringIO(
+            "\xE9\x03" + # object ID in LE order
+            "\x01" + # x
+            "\x02" + # y
+            "\x03" + # width
+            "\x04" + # height
+            "\x05" + # flags
+            "\x06" + # parent
+            "\x07\x00" + # walk_x
+            "\x08\x00" + # walk_y
+            "\x09" # actor_dir
+        )
+
+        decrypt = False
+        self.block.size = 13
+        def mock_read_raw_data(resource, size, descrypt):
+            return resource.read(size)
+        self.block._read_raw_data = mock_read_raw_data
+        self.block._read_data(resource, 0, decrypt)
+        self.assertEqual(self.block.obj_id, 1001)
+        self.assertEqual(self.block.x, 1)
+        self.assertEqual(self.block.y, 2)
+        self.assertEqual(self.block.width, 3)
+        self.assertEqual(self.block.height, 4)
+        self.assertEqual(self.block.flags, 5)
+        self.assertEqual(self.block.parent, 6)
+        self.assertEqual(self.block.walk_x, 7)
+        self.assertEqual(self.block.walk_y, 8)
+        self.assertEqual(self.block.actor_dir, 9)
+        
+    def test_BlockCDHDV5_write_data(self):
+        resource = StringIO.StringIO()
+        
+        self.populate_block()
+        encrypt = False
+        self.block._write_data(resource, encrypt)
+        
+        self.assertEqual(
+            resource.getvalue(),
+            "\xE9\x03" + # object ID in LE order
+            "\x01" + # x
+            "\x02" + # y
+            "\x03" + # width
+            "\x04" + # height
+            "\x05" + # flags
+            "\x06" + # parent
+            "\x07\x00" + # walk_x
+            "\x08\x00" + # walk_y
+            "\x09" # actor_dir
+        )
+        
 
 if __name__ == '__main__':
     unittest.main()
