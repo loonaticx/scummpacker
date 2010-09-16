@@ -73,7 +73,8 @@ class FileDispatcherV4(AbstractFileDispatcher):
         #r"LC.dmp" : blocks.BlockDefaultV4, # ignored
         r"PA.dmp" : blocks.BlockDefaultV4,
         r"SA.dmp" : blocks.BlockDefaultV4,
-        r"SL.dmp" : blocks.BlockDefaultV4,
+        r"NL.dmp" : blocks.BlockDefaultV4, # appears between OC and OI blocks
+        r"SL.dmp" : blocks.BlockDefaultV4, # appears between OC and OI blocks
         r"SP.dmp" : blocks.BlockDefaultV4,
         r"objects" : blocks.ObjectBlockContainerV4,
         r"scripts" : blocks.ScriptBlockContainerV4,

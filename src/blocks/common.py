@@ -522,6 +522,7 @@ class BlockRoom(BlockContainer): # also globally indexed
         self.lf_name = None
         self.script_types = frozenset()
         self.object_types = frozenset()
+        self.object_between_types = frozenset() # workaround for V4 "NL" and "SL"
         self.object_image_type = None
         self.object_code_type = None
         self.num_scripts_type = None
@@ -542,6 +543,8 @@ class BlockRoom(BlockContainer): # also globally indexed
                 object_container.add_image_block(block)
             elif block.name == self.object_code_type:
                 object_container.add_code_block(block)
+            elif block.name in self.object_between_types:
+                object_container.add_between_block(block)
             elif block.name == self.num_scripts_type: # ignore this since we can generate it
                 del block
                 continue
@@ -783,6 +786,7 @@ class ObjectBlockContainer(object):
         self.crypt_value = crypt_value
         self.name = "objects"
         self.order_map = { self.obcd_name : [], self.obim_name : [] }
+        self.between_blocks = []
 
     def _init_class_data(self):
         self.obcd_name = None # string
@@ -803,6 +807,11 @@ class ObjectBlockContainer(object):
         self.objects[block.obj_id][0] = block
         self.order_map[self.obim_name].append(block.obj_id)
 
+    def add_between_block(self, block):
+        """Workaround for SCUMM V4 which has "SL" and "NL" blocks
+        in between the OI and OC blocks."""
+        self.between_blocks.append(block)
+
     def save_to_file(self, path):
         objects_path = os.path.join(path, self.generate_file_name())
         if not os.path.isdir(objects_path):
@@ -818,8 +827,16 @@ class ObjectBlockContainer(object):
             objcode.save_to_file(newpath)
             self._save_header_to_xml(newpath, objimage, objcode)
         self._save_order_to_xml(objects_path)
+        # Workaround for V4 "SL" and "NL" blocks.
+        for b in self.between_blocks:
+            b.save_to_file(objects_path)
 
     def save_to_resource(self, resource, room_start=0):
+        self._save_object_images_to_resource(resource, room_start)
+        self._save_between_blocks_to_resource(resource, room_start)
+        self._save_object_codes_to_resource(resource, room_start)
+
+    def _save_object_images_to_resource(self, resource, room_start):
         object_keys = self.objects.keys()
         # Write all image blocks first
         object_keys = util.ordered_sort(object_keys, self.order_map[self.obim_name])
@@ -827,7 +844,13 @@ class ObjectBlockContainer(object):
             #logging.debug("Writing object image: " + str(obj_id))
             self.objects[obj_id][0].save_to_resource(resource, room_start)
 
-        # Then write all object code/names
+    def _save_between_blocks_to_resource(self, resource, room_start):
+        for b in self.between_blocks:
+            b.save_to_resource(resource, room_start)
+
+    def _save_object_codes_to_resource(self, resource, room_start):
+        object_keys = self.objects.keys()
+        # Write all object code/names
         object_keys = util.ordered_sort(object_keys, self.order_map[self.obcd_name])
         for obj_id in object_keys:
             #logging.debug("Writing object code: " + str(objcode.obj_id))
@@ -878,6 +901,13 @@ class ObjectBlockContainer(object):
             objcode = self.obcd_class(self.block_name_length, self.crypt_value)
             objcode.load_from_file(new_path)
             self.add_code_block(objcode)
+
+        file_list = [f for f in file_list if not f in object_dirs]
+        for f in file_list:
+            b = control.file_dispatcher.dispatch_next_block(f)
+            if b != None:
+                b.load_from_file(os.path.join(path, f))
+                self.between_blocks.append(b)
 
         self._load_order_from_xml(path)
 

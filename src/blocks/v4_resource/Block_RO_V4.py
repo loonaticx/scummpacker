@@ -11,8 +11,10 @@ class BlockROV4(BlockRoom, BlockContainerV4): # also globally indexed
                                   "LS"])
         self.object_types = frozenset(["OI",
                                   "OC"])
+        self.object_between_types = frozenset(["NL",
+                                  "SL"])
         self.object_image_type = "OI"
         self.object_code_type = "OC"
-        self.num_scripts_type = "NL"
+        self.num_scripts_type = "LC"
         self.script_container_class = ScriptBlockContainerV4
         self.object_container_class = ObjectBlockContainerV4

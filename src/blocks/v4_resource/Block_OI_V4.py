@@ -57,7 +57,7 @@ class BlockOIV4(BlockDefaultV4):
 
     def _calculate_size(self):
         # block header + header data + data size
-        return 6 + 1 + len(self.data)
+        return 6 + 2 + len(self.data)
 
     def generate_xml_node(self, parent_node):
         XMLHelper().write(self, parent_node, self.xml_structure)

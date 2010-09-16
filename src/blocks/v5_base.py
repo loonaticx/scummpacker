@@ -1,9 +1,7 @@
 # TODO: sort out imports
 from __future__ import with_statement
 import array
-import logging
 import os
-import re
 import scummpacker_control as control
 import scummpacker_util as util
 from common import *

@@ -11,6 +11,7 @@ class BlockROOMV5(BlockRoom, BlockContainerV5): # also globally indexed
                                   "LSCR"])
         self.object_types = frozenset(["OBIM",
                                   "OBCD"])
+        self.object_between_types = frozenset()
         self.object_image_type = "OBIM"
         self.object_code_type = "OBCD"
         self.num_scripts_type = "NLSC"
