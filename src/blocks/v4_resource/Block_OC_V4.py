@@ -1,4 +1,5 @@
 from __future__ import with_statement
+import logging
 import os
 import struct
 import xml.etree.ElementTree as et
@@ -19,6 +20,7 @@ class BlockOCV4(BlockDefaultV4):
             ("parent", 'h', 'parent'),
             ("walk_x", 'i', 'walk_x'),
             ("walk_y", 'i', 'walk_y'),
+            ("actor_dir", "i", "actor_dir")
             )
         ),
     )
@@ -57,7 +59,7 @@ class BlockOCV4(BlockDefaultV4):
         # Read the event table
         event_table_size = (start + name_offset) - resource.tell()
         #logging.debug("event table size: %s, thing1: %s, resource tell: %s" % (event_table_size, (start + name_offset), resource.tell()))
-        data = self._read_raw_data(resource, event_table_size - 1, decrypt)
+        data = self._read_raw_data(resource, event_table_size, decrypt)
         self.event_table = data
 
         # Read object name (null-terminated string)
@@ -120,9 +122,14 @@ class BlockOCV4(BlockDefaultV4):
         """ Assumes it's writing to a resource."""
         # TODO: validate values fit into clamped?
         y_and_parent_state = (self.parent_state & 0x80) | (self.y & 0x7F)
-        height_and_actor_dir = (self.height & 0xF8) | (self.height & 0x07)
+        height_and_actor_dir = (self.height & 0xF8) | (self.actor_dir & 0x07)
 
+        if len(self.event_table) == 0:
+            self.event_table.append(0x00)
         name_offset = 6 + 13 + len(self.event_table)
+        #assert len(self.event_table) > 0
+        #logging.debug(self.event_table)
+        #logging.debug("name offset: %s" % name_offset)
 
         # Object header
         data = struct.pack("<H5B2h2B", self.obj_id, self.unknown, self.x, y_and_parent_state, self.width,

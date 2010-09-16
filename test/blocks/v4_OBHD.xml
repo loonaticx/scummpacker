@@ -5,11 +5,12 @@
     <x>1</x>
     <y>2</y>
     <width>3</width>
-    <height>4</height>
+    <height>160</height>
     <unknown>0x5</unknown>
     <parent_state>0x6</parent_state>
     <parent>0x7</parent>
     <walk_x>8</walk_x>
     <walk_y>9</walk_y>
+    <actor_dir>4</actor_dir>
 </code>
 </object>

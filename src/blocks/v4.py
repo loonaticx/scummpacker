@@ -19,7 +19,7 @@ def __test_unpack():
 #    dirfile.close()
 #
 #    dir_block.save_to_file(outpath)
-    print dispatchers.INDEXED_BLOCKS_V4
+    #print dispatchers.INDEXED_BLOCKS_V4
     control.unknown_blocks_counter = control.IndexCounter(*dispatchers.INDEXED_BLOCKS_V4)
     control.global_index_map = control.IndexMappingContainer(*dispatchers.INDEXED_BLOCKS_V4)
 
@@ -65,7 +65,7 @@ def __test_pack():
         index_block.save_to_resource(outindres)
     
 def __test():
-    #__test_unpack()
+    __test_unpack()
     #__test_unpack_from_file()
     __test_pack()
 

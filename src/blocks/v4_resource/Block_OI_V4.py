@@ -41,7 +41,7 @@ class BlockOIV4(BlockDefaultV4):
             end_data = data_file.tell()
             data_size = end_data - start_data
             data_file.seek(start_data, os.SEEK_SET)
-            logging.debug("Attempting to load %s. start_data = %s. end_data = %s. data_size = %s" % (path, start_data, end_data, data_size))
+            #logging.debug("Attempting to load %s. start_data = %s. end_data = %s. data_size = %s" % (path, start_data, end_data, data_size))
             data = self._read_raw_data(data_file, data_size, False)
             self.data = data
 

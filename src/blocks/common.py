@@ -110,7 +110,7 @@ class BlockContainer(AbstractBlock):
         self.order_map = {}
 
     def _read_data(self, resource, start, decrypt):
-        logging.debug("Reading children from container block...")
+        #logging.debug("Reading children from container block...")
         end = start + self.size
         while resource.tell() < end:
             block = control.block_dispatcher.dispatch_next_block(resource)
@@ -126,7 +126,7 @@ class BlockContainer(AbstractBlock):
 
     def _find_block_rank(self, block):
         rank_lookup_name = self._find_block_rank_lookup_name(block)
-        logging.debug("Ordering block: %s" % (rank_lookup_name))
+        #logging.debug("Ordering block: %s" % (rank_lookup_name))
         block_rank = self.block_ordering.index(rank_lookup_name) # requires all block types are listed
         return block_rank
 
@@ -555,8 +555,8 @@ class BlockRoom(BlockContainer): # also globally indexed
 
     def save_to_resource(self, resource, room_start=0):
         location = resource.tell()
-        logging.debug("Saving room")
         room_num = control.global_index_map.get_index(self.lf_name, room_start)
+        logging.debug("Saving room: %s" % room_num)
         control.global_index_map.map_index(self.name, room_num, location)
         super(BlockRoom, self).save_to_resource(resource, room_start)
 
@@ -980,8 +980,6 @@ class ScriptBlockContainer(object):
             s.save_to_file(newpath)
 
     def save_to_resource(self, resource, room_start=0):
-        # Determine the number of local scripts
-        num_local_scripts = len(self.local_scripts)
         # Write entry and exit scripts (seperate from local scripts)
         if not self.encd_script or not self.excd_script:
             room_num = control.global_index_map.get_index(self.lf_name, room_start)
@@ -989,15 +987,22 @@ class ScriptBlockContainer(object):
                 "Room #" + str(room_num) + " appears to be missing either a room entry or exit script (or both).")
         self.excd_script.save_to_resource(resource, room_start)
         self.encd_script.save_to_resource(resource, room_start)
-        # Generate and write "number of local scripts" block (could be prettier, should have its own class)
-        resource.write(util.crypt(self.num_local_name, self.crypt_value))
-        resource.write(util.int2str(10, 4, util.BE, self.crypt_value)) # size of this block is always 10
-        resource.write(util.int2str(num_local_scripts, 2, util.LE, self.crypt_value))
+        
+        # Generate and write "number of local scripts" block
+        self._write_number_of_local_scripts(resource)
+
         # Write all local scripts sorted by script number
         self.local_scripts.sort(cmp=lambda x,y: cmp(x.script_id, y.script_id))
         for s in self.local_scripts:
             s.save_to_resource(resource, room_start)
 
+    def _write_number_of_local_scripts(self, resource):
+        # Determine the number of local scripts
+        num_local_scripts = len(self.local_scripts)
+        resource.write(util.crypt(self.num_local_name, self.crypt_value)) # write the block header's name
+        resource.write(util.int2str(10, 4, util.BE, self.crypt_value)) # size of this block is always 10
+        resource.write(util.int2str(num_local_scripts, 2, util.LE, self.crypt_value))
+            
     def load_from_file(self, path):
         file_list = os.listdir(path)
 

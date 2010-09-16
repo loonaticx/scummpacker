@@ -79,7 +79,7 @@ class BlockContainerV4(BlockContainer, BlockDefaultV4):
     def _read_data(self, resource, start, decrypt):
         """Also, first LF file seems to store (junk?) data after the last child block, at least
         for LOOM CD and Monkey Island 1."""
-        logging.debug("Reading children from container block...")
+        #logging.debug("Reading children from container block...")
         end = start + self.size
         while resource.tell() < end:
             if resource.tell() in self.junk_locations:
@@ -122,5 +122,5 @@ class BlockIndexDirectoryV4(BlockIndexDirectory, BlockDefaultV4):
         for i, key in enumerate(zip(room_nums, offsets)):
             control.global_index_map.map_index(self.DIR_TYPES[self.name], key, i)
         
-        logging.debug("Index for : %s" % self.name)
-        logging.debug(control.global_index_map.items(self.DIR_TYPES[self.name]))
+        #logging.debug("Index for : %s" % self.name)
+        #logging.debug(control.global_index_map.items(self.DIR_TYPES[self.name]))
