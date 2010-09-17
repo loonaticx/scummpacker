@@ -89,7 +89,8 @@ class BlockOCV4(BlockDefaultV4):
 
         # Shared
         self.obj_id = util.xml2int(root.find("id").text)
-        self.obj_name = root.find("name").text
+        name = root.find("name").text
+        self.obj_name = '' if name is None else util.unescape_invalid_chars(name)
         self.obj_name = self.obj_name if self.obj_name != None else ""
 
         XMLHelper().read(self, root, self.xml_structure)
@@ -154,5 +155,4 @@ class BlockOCV4(BlockDefaultV4):
         # block header + header data + verb table + object name + null-terminator + script size
         return 6 + 13 + len(self.event_table) + len(self.obj_name) + 1 + len(self.script_data)
 
-    def generate_xml_node(self, parent_node):
-        XMLHelper().write(self, parent_node, self.xml_structure)
+ 

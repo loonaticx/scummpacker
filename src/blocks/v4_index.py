@@ -42,14 +42,15 @@ class Block0OV4(BlockObjectIndexes, BlockDefaultV4):
         self.objects = []
         # Read all owner+state and class data values
         for _ in xrange(num_items):
+            class_data = util.str2int(resource.read(self.class_data_size), util.LE, crypt_val=(self.crypt_value if decrypt else None))            
             owner_and_state = util.str2int(resource.read(1), crypt_val=(self.crypt_value if decrypt else None))
             owner = (owner_and_state & 0xF0) >> 4
-            state = owner_and_state & 0x0F
-            class_data = util.str2int(resource.read(self.class_data_size), crypt_val=(self.crypt_value if decrypt else None))
+            state = owner_and_state & 0x0F            
             self.objects.append([owner, state, class_data])
 
     def _save_table_data(self, resource):
         for owner, state, class_data in self.objects:
+            resource.write(util.int2str(class_data, self.class_data_size, util.LE, crypt_val=self.crypt_value))            
             combined_val = ((owner & 0x0F) << 4) | (state & 0x0F)
             resource.write(util.int2str(combined_val, 1, crypt_val=self.crypt_value))
-            resource.write(util.int2str(class_data, self.class_data_size, crypt_val=self.crypt_value))
+            

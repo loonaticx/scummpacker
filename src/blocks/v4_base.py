@@ -70,7 +70,10 @@ class BlockContainerV4(BlockContainer, BlockDefaultV4):
         "CO", # costume
     ]
 
-    # Anyone know what this junk data is?
+    # These locations appear to be bogus blocks, as they have no header (just 0x0000 where
+    #  the block name should be). However, these locations are referenced in the "0N" index,
+    #  so they must be sounds. I think they match the CD-track format "SOUN" blocks in 
+    #  Monkey Island 1 CD (which is SCUMM V5).
     junk_locations = {
         63314 : 24, # Loom CD
         3601305 : 24, # Loom CD

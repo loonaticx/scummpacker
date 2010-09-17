@@ -1,7 +1,7 @@
-ScummPacker v3
+ScummPacker v2
 ==============
 Laurence Dougal Myers <jestarjokin@jestarjokin.net>
-Doc v1.0, January 2010
+Doc v1.0, October 2010
 
 Introduction
 ------------
@@ -21,7 +21,7 @@ To unpack a game, you must specify an input file and an output directory. ScummP
 scummpacker -p -i D:\Games\MI2\MONKEY2.000 -o D:\temp
 --------------------------------------
 
-To pack a game, you must specify an input directory and an output file, AND the game or SCUMM version.
+To pack a game, you must specify an input directory and an output file, AND either the game, or the SCUMM version to target.
 
 --------------------------------------
 scummpacker -u -i D:\temp -o D:\temp\MI2repack.000 -g MI2
@@ -34,9 +34,9 @@ Here are the options useable in ScummPacker:
  -h, --help 
   Print out options help
  -v SCUMM-VERSION, --scumm-version=SCUMM-VERSION
-  Specify the SCUMM version to target. Possible options are: 5
+  Specify the SCUMM version to target. Possible options are: 4, 5
  -g GAME, --game=GAME
-  Specify the game to target. Possible options are: MI2, FOA, MI1CD
+  Specify the game to target. Possible options are: LOOMCD, MI2, FOA, MI1CD
  -i INPUT_FILE_NAME, --input-file-name=INPUT_FILE_NAME
   Specify an input file name. If unpacking, and an input file name is not specified, but the -g option is supplied, Scummpacker will try to guess the file name.
  -o OUTPUT_FILE_NAME, --output-file-name=OUTPUT_FILE_NAME
@@ -55,7 +55,7 @@ Block Orders
 ~~~~~~~~~~~~
 Sometimes, blocks within the game resources are not in sorted order. For instance, if a room contains objects with IDs of 146, 147, and 148, the object image blocks may be in order 148, 146, 147, and the object code blocks may be in order 147, 148, 146! 
 
-To support this odd ordering, each directory could contain an XML file called "order.xml". This file determines the orders for certain block types. If this file is absent, the blocks will be packed in sorted order. 
+To support this odd ordering, each directory could contain an XML file called "order.xml". This file determines the orders for certain block types. If this file is absent, the blocks will be packed in sorted order. If a block does not have an entry in "order.xml", it will be appended after all other entries in "order.xml". You can safely delete any "order.xml" file; it is only required if you wish the packed resources to be near-identical to the original resources.
 
 Index File Padding
 ~~~~~~~~~~~~~~~~~~
@@ -65,8 +65,9 @@ ScummPacker will replicate this padding. If a SCUMM version is specified but no 
 
 Adding more resources beyond the padding limit may work; then again, it may not.
 
-Default games for SCUMM versions:
- SCUMM v5 = Monkey Island 2 
+ Default games for SCUMM versions:
+ - SCUMM v4 = Loom CD
+ - SCUMM v5 = Monkey Island 2 
 
 Index Files and Resource Numbering
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -76,10 +77,10 @@ Some game resource files could contain unused resource blocks; these blocks do n
 
 Some index files contain extra information that cannot be automatically generated. These will be extracted as XML files.
 
- SCUMM 5:
- dobj.xml = directory of objects and class data. The object information is mostly dummy data, it's the class data that's important. NOTE: objects MUST be in sequential order, and there can be NO gaps in the object numbering (just because that's how I wrote ScummPacker)!
- maxs.xml = maximum values, basically configuration options for the SCUMM engine.
- roomnames.xml = human-readable names for the rooms in the game. Each name is limited to 9 characters. Seem to be only for developer's use.
+ SCUMM v5:
+ - dobj.xml = directory of objects and class data. The object information is mostly dummy data, it's the class data that's important. NOTE: objects MUST be in sequential order, and there can be NO gaps in the object numbering.
+ - maxs.xml = maximum values, basically configuration options for the SCUMM engine.
+ - roomnames.xml = human-readable names for the rooms in the game. Each name is limited to 9 characters. Seem to be only for developer's use.
 
 MIDI Files
 ~~~~~~~~~~
@@ -89,34 +90,68 @@ Generally, MIDI files are stored in the game resources with the same header info
 
 2) While packing, if there is a file ending in the extension '.mdhd', this file is used for the MIDI file being read in. For instance, if there is a file "ROL.mid" (representing music for the Roland MT-32), and another file called "ROL.mdhd", the non-standard header contained in the ".mdhd" file will be read.
 
+Object Class Data
+~~~~~~~~~~~~~~~~~
+The index files (.000) contain metadata for the objects in the game. Unlike the other entries in the .000 file, this data cannot be generated during packing. So, during unpacking, a new file called "dobj.xml" is created. This stores three values for each object: the owner (or parent), the state, and the class data. 
+
+The class data can be one of the following values:
+
+ SCUMM v3/4
+ - No Class = 0
+ - Y Flip = 18
+ - X Flip = 19
+ - Never Clip = 20
+ - Always Clip = 21
+ - Ignore Boxes = 22
+ - Player = 23	// Actor is controlled by the player
+ - Untouchable = 24
+ 
+ SCUMM V5+
+ - No class = 0
+ - Never Clip = 20
+ - Always Clip = 21
+ - Ignore Boxes = 22
+ - Y Flip = 29
+ - X Flip = 30
+ - Player = 31	// Actor is controlled by the player
+ - Untouchable = 32
+
 SCUMM Version and Games
 ~~~~~~~~~~~~~~~~~~~~~~~
 Just in case you were wondering...
 
-SCUMM v2 (unsupported)
- Maniac Mansion
- Zak McKracken and the Alien Mindbenders
+ SCUMM v2 (unsupported)
+ - Maniac Mansion
+ - Zak McKracken and the Alien Mindbenders
 
-SCUMM v3 (unsupported)
- Indiana Jones and the Last Crusade (EGA)
- Indiana Jones and the Last Crusade (VGA)
- Loom
- Zak McKracken and the Alien Mindbenders (FM-TOWNS) 
+ SCUMM v3 (unsupported)
+ - Indiana Jones and the Last Crusade (EGA)
+ - Indiana Jones and the Last Crusade (VGA)
+ - Loom
+ - Zak McKracken and the Alien Mindbenders (FM-TOWNS) 
 
-SCUMM v4 (unsupported)
- Loom (CD)
- Monkey Island 1 (EGA)
- Monkey Island 1 (VGA)
+ SCUMM v4 (unsupported)
+ - Loom (CD)
+ - Monkey Island 1 (EGA)
+ - Monkey Island 1 (VGA)
 
-SCUMM v5
- Indiana Jones and the Fate of Atlantis
- Monkey Island 1 (CD)
- Monkey Island 2
+ SCUMM v5
+ - Indiana Jones and the Fate of Atlantis
+ - Monkey Island 1 (CD)
+ - Monkey Island 2
 
-SCUMM v6 (unsupported)
- Day of the Tentacle
- Sam and Max Hit the Road
+ SCUMM v6 (unsupported)
+ - Day of the Tentacle
+ - Sam and Max Hit the Road
 
+XML Files
+~~~~~~~~~
+Some game resources can be unpacked to XML files, such as object header data. For any text values that fall out of the ASCII range of characters, or cannot otherwise be easily represented as-is, the affected character will be escaped of "\x", followed by the byte value, e.g. "\x18".
+ 
+More Information
+----------------
+Further technical information on the SCUMM resource formats can be found on the ScummVM wiki, at <http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference>.
+ 
 Future Tasks
 ------------
 Support for other versions of SCUMM (V3, V4, maybe V6).

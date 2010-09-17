@@ -3,7 +3,7 @@ import string
 import copy
 
 __valid_file_chars = frozenset("-_.() %s%s" % (string.ascii_letters, string.digits)) # for filenames
-__valid_text_chars = frozenset("!@#$%s&*+\"';:,-_.() %s%s" % ("%", string.ascii_letters, string.digits)) # for XML files
+__valid_text_chars = frozenset("!?@#$%s&*+\"';:,-_.() %s%s" % ("%", string.ascii_letters, string.digits)) # for XML files
     
 def crypt(in_val, crypt_val):
     if crypt_val is None:

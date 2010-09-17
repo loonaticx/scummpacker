@@ -65,7 +65,7 @@ def __test_pack():
         index_block.save_to_resource(outindres)
     
 def __test():
-    __test_unpack()
+    #__test_unpack()
     #__test_unpack_from_file()
     __test_pack()
 

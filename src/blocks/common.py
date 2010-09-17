@@ -463,8 +463,8 @@ class BlockLucasartsFile(BlockContainer, BlockGloballyIndexed):
 
 class BlockRoomOffsets(AbstractBlock):
     name = NotImplementedError("This property must be overridden by inheriting classes.") # string
-    LFLF_NAME = NotImplementedError("This property must be overridden by inheriting classes.") # class name
-    ROOM_NAME = NotImplementedError("This property must be overridden by inheriting classes.") # class name
+    LFLF_NAME = NotImplementedError("This property must be overridden by inheriting classes.") # class name (string)
+    ROOM_NAME = NotImplementedError("This property must be overridden by inheriting classes.") # class name (string)
     OFFSET_POINTS_TO_ROOM = NotImplementedError("This property must be overridden by inheriting classes.") # boolean
 
     def _read_data(self, resource, start, decrypt):
@@ -498,13 +498,22 @@ class BlockRoomOffsets(AbstractBlock):
         # Possible inconsistency, in that this uses the global index map for ROOM blocks,
         #  whereas the "write_dummy_block" just looks at the number passed in, which
         #  comes from the number of entries in the file system.
-        room_table = sorted(control.global_index_map.items(self.ROOM_NAME))
-        num_of_rooms = len(room_table)
-        resource.write(util.int2str(num_of_rooms, 1, crypt_val=self.crypt_value))
-        for room_num, room_offset in room_table:
-            room_num = int(room_num)
-            resource.write(util.int2str(room_num, 1, crypt_val=self.crypt_value))
-            resource.write(util.int2str(room_offset, 4, util.LE, self.crypt_value))
+        if self.OFFSET_POINTS_TO_ROOM:
+            room_table = sorted(control.global_index_map.items(self.ROOM_NAME))
+            num_of_rooms = len(room_table)
+            resource.write(util.int2str(num_of_rooms, 1, crypt_val=self.crypt_value))
+            for room_num, room_offset in room_table:
+                room_num = int(room_num)
+                resource.write(util.int2str(room_num, 1, crypt_val=self.crypt_value))
+                resource.write(util.int2str(room_offset, 4, util.LE, self.crypt_value))
+        else:
+            room_table = sorted(control.global_index_map.items(self.LFLF_NAME))
+            num_of_rooms = len(room_table)
+            resource.write(util.int2str(num_of_rooms, 1, crypt_val=self.crypt_value))
+            for lf_offset, room_num in room_table:
+                room_num = int(room_num)
+                resource.write(util.int2str(room_num, 1, crypt_val=self.crypt_value))
+                resource.write(util.int2str(lf_offset, 4, util.LE, self.crypt_value))
 
     def write_dummy_block(self, resource, num_rooms):
         """This method should be called before save_to_resource. It just
@@ -689,7 +698,9 @@ class BlockObjectIndexes(AbstractBlock):
             resource.write(util.int2str(class_data, self.class_data_size, crypt_val=self.crypt_value))
                 
 class BlockRoomIndexes(AbstractBlock):
-    """Don't really seem to be used much for V5 and LOOM CD.
+    """Directory of offsets to ROOM blocks.
+    
+    Don't really seem to be used much for V5 and LOOM CD.
 
     Each game seems to have a different padding length."""
     name = NotImplementedError("This property must be overridden by inheriting classes.")
@@ -703,7 +714,6 @@ class BlockRoomIndexes(AbstractBlock):
                                        self.DEFAULT_PADDING_LENGTHS[control.global_args.game])
         super(BlockRoomIndexes, self).__init__(*args, **kwds)
 
-    """Directory of offsets to ROOM blocks."""
     def save_to_file(self, path):
         """This block is generated when saving to a resource."""
         return

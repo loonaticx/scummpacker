@@ -23,9 +23,7 @@ class BlockOBNAV5(BlockDefaultV5):
 
         # Shared
         name = root.find("name").text
-        if name == None:
-            name = ''
-        self.obj_name = util.unescape_invalid_chars(name)
+        self.obj_name = '' if name is None else util.unescape_invalid_chars(name)
 
     def _write_data(self, outfile, encrypt):
         # write object name + "\x00"
