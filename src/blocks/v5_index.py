@@ -79,7 +79,7 @@ class BlockMAXSV5(BlockDefaultV5):
 
 class BlockDOBJV5(BlockDefaultV5):
     name = "DOBJ"
-    HAS_OBJECT_CLASS_DATA = True
+    class_data_size = 4
 
 
 class BlockDROOV5(BlockRoomIndexes, BlockDefaultV5):

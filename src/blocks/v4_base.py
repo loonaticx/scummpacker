@@ -1,7 +1,6 @@
 #! /usr/bin/python
 from __future__ import with_statement
 import logging
-import os
 import scummpacker_control as control
 import scummpacker_util as util
 from common import *
@@ -60,13 +59,14 @@ class BlockContainerV4(BlockContainer, BlockDefaultV4):
          "EN", # entry code
          "LC", # number of local scripts?
          "LS", # local script
-        "scripts",
+         "scripts",
         # Inside LF again
         "SC", # script
         "SO", # sound
          # Inside SO
          "WA", # voc
          "AD", # adlib
+        "\x00\x00", # junk data
         "CO", # costume
     ]
 
@@ -83,8 +83,11 @@ class BlockContainerV4(BlockContainer, BlockDefaultV4):
         end = start + self.size
         while resource.tell() < end:
             if resource.tell() in self.junk_locations:
-                logging.warning("Skipping known junk data at offset: %d" % resource.tell() )
-                resource.seek(self.junk_locations[resource.tell()], os.SEEK_CUR) # skip junk data
+                logging.warning("Found known junk data at offset: %d" % resource.tell() )
+#                block = JunkDataV4(self.block_name_length, self.crypt_value)
+#                block.load_from_resource(resource, start)
+#                self.append(block)
+#                continue
             block = control.block_dispatcher.dispatch_next_block(resource)
             block.load_from_resource(resource, start)
             self.append(block)
@@ -101,9 +104,9 @@ class BlockIndexDirectoryV4(BlockIndexDirectory, BlockDefaultV4):
     }
     MIN_ENTRIES = {
         "LOOMCD" : {
-            "0S" : 199, # TODO: found out right values
-            "0N" : 150, # TODO: found out right values
-            "0C" : 150  # TODO: found out right values
+            "0S" : 199,
+            "0N" : 199,
+            "0C" : 199
         }
     }
 
@@ -124,3 +127,32 @@ class BlockIndexDirectoryV4(BlockIndexDirectory, BlockDefaultV4):
         
         #logging.debug("Index for : %s" % self.name)
         #logging.debug(control.global_index_map.items(self.DIR_TYPES[self.name]))
+
+    def _save_table_data(self, resource, num_items, item_map):
+        for i in xrange(num_items):
+            if not i in item_map:
+                # write dummy values for unused item numbers.
+                resource.write(util.int2str(0, 1, crypt_val=self.crypt_value))
+                resource.write(util.int2str(0, 4, crypt_val=self.crypt_value))
+            else:
+                room_num, offset = item_map[i]
+                resource.write(util.int2str(room_num, 1, crypt_val=self.crypt_value))
+                resource.write(util.int2str(offset, 4, crypt_val=self.crypt_value))
+
+
+class JunkDataV4(BlockDefaultV4):
+    """LOOM CD contains junk data after two of the LF blocks.
+    This class allows ScummPacker to save this data (so we can
+    add it in to the new resource for a bit-identical copy)."""
+
+    #name = "\x00\x00"
+    # Special value used to generate file name. Needs to be set by the
+    #  containing/parent block.
+    #parent_name = ""
+
+    def save_to_resource(self, resource, room_start=0):
+        logging.debug("Saving junk data to resource. room_start: %s" % room_start)
+        super(JunkDataV4, self).save_to_resource(resource, room_start)
+
+    def generate_file_name(self):
+        return "00_junk.dmp"

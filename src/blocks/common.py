@@ -4,6 +4,7 @@ import functools
 import logging
 import os
 import re
+import struct
 import xml.etree.ElementTree as et
 import scummpacker_control as control
 import scummpacker_util as util
@@ -92,11 +93,19 @@ class AbstractBlock(object):
         return "[" + self.name + "]"
 
     def generate_xml_node(self, parent_node):
-        """ Adds a new XML node to the given parent node."""
+        """ Adds a new XML node to the given parent node.
+
+        Not used by every block. To use it, the "xml_structure" property
+        should be populated, and this method must be specifically called,
+        either from a containing block, or from the "save_to_file" method."""
         XMLHelper().write(self, parent_node, self.xml_structure)
 
     def read_xml_node(self, parent_node):
-        """ Reads data from the given root node."""
+        """ Reads data from the given root node.
+
+        Not used by every block. To use it, the "xml_structure" property
+        should be populated, and this method must be specifically called,
+        either from a containing block, or from the "save_to_resource" method."""
         XMLHelper().read(self, parent_node, self.xml_structure)
 
 class BlockContainer(AbstractBlock):
@@ -597,6 +606,9 @@ class BlockIndexDirectory(AbstractBlock):
         self._write_header(resource, True)
 
         resource.write(util.int2str(num_items, 2, crypt_val=self.crypt_value))
+        self._save_table_data(resource, num_items, item_map)
+
+    def _save_table_data(self, resource, num_items, item_map):
         for i in xrange(num_items):
             if not i in item_map:
                 # write dummy values for unused item numbers.
@@ -614,22 +626,21 @@ class BlockIndexDirectory(AbstractBlock):
 
 class BlockObjectIndexes(AbstractBlock):
     name = NotImplementedError("This property must be overridden by inheriting classes.")
-    HAS_OBJECT_CLASS_DATA = NotImplementedError("This property must be overridden by inheriting classes.")
+    class_data_size = NotImplementedError("This property must be overridden by inheriting classes.")
 
     def _read_data(self, resource, start, decrypt):
         num_items = util.str2int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
         self.objects = []
-        # Write all owner+state values
+        # Read all owner+state values
         for _ in xrange(num_items):
             owner_and_state = util.str2int(resource.read(1), crypt_val=(self.crypt_value if decrypt else None))
             owner = (owner_and_state & 0xF0) >> 4
             state = owner_and_state & 0x0F
             self.objects.append([owner, state])
-        # Write all class data values
-        if self.HAS_OBJECT_CLASS_DATA:
-            for i in xrange(num_items):
-                class_data = util.str2int(resource.read(4), crypt_val=(self.crypt_value if decrypt else None))
-                self.objects[i].append(class_data)
+        # Read all class data values
+        for i in xrange(num_items):
+            class_data = util.str2int(resource.read(self.class_data_size), crypt_val=(self.crypt_value if decrypt else None))
+            self.objects[i].append(class_data)
 
     def load_from_file(self, path):
         tree = et.parse(path)
@@ -641,26 +652,19 @@ class BlockObjectIndexes(AbstractBlock):
                 raise util.ScummPackerException("Entries in object ID XML must be in sorted order with no gaps in ID numbering.")
             owner = util.xml2int(obj_node.find("owner").text)
             state = util.xml2int(obj_node.find("state").text)
-            if self.HAS_OBJECT_CLASS_DATA:
-                class_data = util.xml2int(obj_node.find("class-data").text)
-                self.objects.append([owner, state, class_data])
-            else:
-                self.objects.append([owner, state])
+            class_data = util.xml2int(obj_node.find("class-data").text)
+            self.objects.append([owner, state, class_data])
 
     def save_to_file(self, path):
         root = et.Element("object-directory")
 
         for i in xrange(len(self.objects)):
-            if self.HAS_OBJECT_CLASS_DATA:
-                owner, state, class_data = self.objects[i]
-            else:
-                owner, state = self.objects[i]
+            owner, state, class_data = self.objects[i]
             obj_node = et.SubElement(root, "object-entry")
             et.SubElement(obj_node, "id").text = util.int2xml(i + 1)
             et.SubElement(obj_node, "owner").text = util.int2xml(owner)
             et.SubElement(obj_node, "state").text = util.int2xml(state)
-            if self.HAS_OBJECT_CLASS_DATA:
-                et.SubElement(obj_node, "class-data").text = util.hex2xml(class_data)
+            et.SubElement(obj_node, "class-data").text = util.hex2xml(class_data)
 
         util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "dobj.xml"))
@@ -670,24 +674,19 @@ class BlockObjectIndexes(AbstractBlock):
         86 and 88 exist but not 87, create a dummy entry for 87."""
         num_items = len(self.objects)
 
-        if self.HAS_OBJECT_CLASS_DATA:
-            entry_size = 5
-        else:
-            entry_size = 1
+        entry_size = 1 + self.class_data_size
         self.size = entry_size * num_items + 2 + self.block_name_length + 4
         self._write_header(resource, True)
 
         resource.write(util.int2str(num_items, 2, crypt_val=self.crypt_value))
-        if self.HAS_OBJECT_CLASS_DATA:
-            for owner, state, _ in self.objects:
-                combined_val = ((owner & 0x0F) << 4) | (state & 0x0F)
-                resource.write(util.int2str(combined_val, 1, crypt_val=self.crypt_value))
-            for _, _, class_data in self.objects:
-                resource.write(util.int2str(class_data, 4, crypt_val=self.crypt_value))
-        else:
-            for owner, state, in self.objects:
-                combined_val = ((owner & 0x0F) << 4) | (state & 0x0F)
-                resource.write(util.int2str(combined_val, 1, crypt_val=self.crypt_value))
+        self._save_table_data(resource)
+
+    def _save_table_data(self, resource):
+        for owner, state, _ in self.objects:
+            combined_val = ((owner & 0x0F) << 4) | (state & 0x0F)
+            resource.write(util.int2str(combined_val, 1, crypt_val=self.crypt_value))
+        for _, _, class_data in self.objects:
+            resource.write(util.int2str(class_data, self.class_data_size, crypt_val=self.crypt_value))
                 
 class BlockRoomIndexes(AbstractBlock):
     """Don't really seem to be used much for V5 and LOOM CD.
@@ -695,6 +694,8 @@ class BlockRoomIndexes(AbstractBlock):
     Each game seems to have a different padding length."""
     name = NotImplementedError("This property must be overridden by inheriting classes.")
     DEFAULT_PADDING_LENGTHS = NotImplementedError("This property must be overridden by inheriting classes.")
+    default_disk_or_room_number = 0
+    default_offset = 0
 
     def __init__(self, *args, **kwds):
         # default padding length is 127 for now
@@ -715,10 +716,59 @@ class BlockRoomIndexes(AbstractBlock):
         self._write_header(resource, True)
         resource.write(util.int2str(self.padding_length, 2, crypt_val=self.crypt_value))
         for _ in xrange(self.padding_length): # this is "file/disk number" rather than "room number" in V4
-            resource.write(util.int2str(0, 1, crypt_val=self.crypt_value))
+            resource.write(util.int2str(self.default_disk_or_room_number, 1, crypt_val=self.crypt_value))
         for _ in xrange(self.padding_length):
-            resource.write(util.int2str(0, 4, crypt_val=self.crypt_value))
-                
+            resource.write(util.int2str(self.default_offset, 4, crypt_val=self.crypt_value))
+
+class BlockRoomHeader(AbstractBlock):
+    name = NotImplementedError("This property must be overridden by inheriting classes.")
+    xml_structure = (
+        ("width", 'i', 'width'),
+        ("height", 'i', 'height'),
+        ("num_objects", 'i', 'num_objects')
+    )
+
+    def _read_data(self, resource, start, decrypt):
+        """
+        width 16le
+        height 16le
+        num_objects 16le
+        """
+        data = resource.read(6)
+        if decrypt:
+            data = util.crypt(data, self.crypt_value)
+        values = struct.unpack("<3H", data)
+        del data
+
+        # Unpack the values
+        self.width, self.height, self.num_objects = values
+        del values
+
+    def load_from_file(self, path):
+        self.size = 6 + self.block_name_length + 4
+        self._load_header_from_xml(path)
+
+    def _load_header_from_xml(self, path):
+        tree = et.parse(path)
+        root = tree.getroot()
+
+        self.read_xml_node(root)
+
+    def save_to_file(self, path):
+        root = et.Element("room")
+
+        self.generate_xml_node(root)
+
+        util.indent_elementtree(root)
+        et.ElementTree(root).write(os.path.join(path, self.name + ".xml"))
+
+    def _write_data(self, outfile, encrypt):
+        """ Assumes it's writing to a resource."""
+        data = struct.pack("<3H", self.width, self.height, self.num_objects)
+        if encrypt:
+            data = util.crypt(data, self.crypt_value)
+        outfile.write(data)
+
 
 class BlockRoomNames(AbstractBlock):
     name_length = 9

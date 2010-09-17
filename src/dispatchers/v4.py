@@ -35,10 +35,14 @@ class BlockDispatcherV4(AbstractBlockDispatcher):
 
         # Other blocks that should not use default block functionality
         "FO" : blocks.BlockFOV4, # file (room) offsets
+        "HD" : blocks.BlockHDV4, # room header
         "LS" : blocks.BlockLSV4, # local scripts
         "OI" : blocks.BlockOIV4, # object image
         "OC" : blocks.BlockOCV4, # object code
 #        "HD" : None, # room header
+
+        # Junk block
+        "\x00\x00" : blocks.JunkDataV4
 
     }
     REGEX_BLOCKS = [
@@ -68,9 +72,8 @@ class FileDispatcherV4(AbstractFileDispatcher):
         r"BM.dmp" : blocks.BlockDefaultV4,
         r"BX.dmp" : blocks.BlockDefaultV4,
         r"CC.dmp" : blocks.BlockDefaultV4,
-        r"HD.dmp" : blocks.BlockDefaultV4, # TODO
-        #r"RMHD.xml" : blocks.BlockRMHDV4, # TODO
-        #r"LC.dmp" : blocks.BlockDefaultV4, # ignored
+        r"HD.xml" : blocks.BlockHDV4,
+        #r"LC.dmp" : blocks.BlockDefaultV4, # ignored since it's generated
         r"PA.dmp" : blocks.BlockDefaultV4,
         r"SA.dmp" : blocks.BlockDefaultV4,
         r"NL.dmp" : blocks.BlockDefaultV4, # appears between OC and OI blocks
@@ -88,6 +91,9 @@ class FileDispatcherV4(AbstractFileDispatcher):
         r"AD.dmp" : blocks.BlockDefaultV4,
         r"WA.dmp" : blocks.BlockDefaultV4,
 
+        # Junk data (appears between SO sounds and CO costumes in Loom CD)
+        r"00_junk.dmp" : blocks.JunkDataV4,
+
     }
     REGEX_BLOCKS = [
         # LECF
@@ -99,7 +105,9 @@ class FileDispatcherV4(AbstractFileDispatcher):
         (re.compile(r"SC_[0-9]{3}"), blocks.BlockGloballyIndexedV4),
         # --ROOM
         # --scripts
-        (re.compile(r"LS_[0-9]{3}\.dmp"), blocks.BlockLSV4)
+        (re.compile(r"LS_[0-9]{3}\.dmp"), blocks.BlockLSV4),
+        # Junk data
+        #(re.compile(r"junk_.*\.dmp"), blocks.JunkDataV4)
     ]
     IGNORED_BLOCKS = frozenset([
         r"OBHD.xml",
