@@ -66,15 +66,15 @@ class BlockContainerV4(BlockContainer, BlockDefaultV4):
          # Inside SO
          "WA", # voc
          "AD", # adlib
-        "\x00\x00", # junk data
+        "00", # junk/odd sound data
         "CO", # costume
     ]
 
     # These locations appear to be bogus blocks, as they have no header (just 0x0000 where
     #  the block name should be). However, these locations are referenced in the "0N" index,
     #  so they must be sounds. I think they match the CD-track format "SOUN" blocks in 
-    #  Monkey Island 1 CD (which is SCUMM V5).
-    junk_locations = {
+    #  Monkey Island 1 CD (which is SCUMM V5), though I haven't confirmed.
+    junk_sound_locations = {
         63314 : 24, # Loom CD
         3601305 : 24, # Loom CD
     }
@@ -85,12 +85,8 @@ class BlockContainerV4(BlockContainer, BlockDefaultV4):
         #logging.debug("Reading children from container block...")
         end = start + self.size
         while resource.tell() < end:
-            if resource.tell() in self.junk_locations:
-                logging.warning("Found known junk data at offset: %d" % resource.tell() )
-#                block = JunkDataV4(self.block_name_length, self.crypt_value)
-#                block.load_from_resource(resource, start)
-#                self.append(block)
-#                continue
+            if resource.tell() in self.junk_sound_locations:
+                logging.debug("Found known junk sound at offset: %d" % resource.tell() )
             block = control.block_dispatcher.dispatch_next_block(resource)
             block.load_from_resource(resource, start)
             self.append(block)
@@ -141,21 +137,3 @@ class BlockIndexDirectoryV4(BlockIndexDirectory, BlockDefaultV4):
                 room_num, offset = item_map[i]
                 resource.write(util.int2str(room_num, 1, crypt_val=self.crypt_value))
                 resource.write(util.int2str(offset, 4, crypt_val=self.crypt_value))
-
-
-class JunkDataV4(BlockDefaultV4):
-    """LOOM CD contains junk data after two of the LF blocks.
-    This class allows ScummPacker to save this data (so we can
-    add it in to the new resource for a bit-identical copy)."""
-
-    #name = "\x00\x00"
-    # Special value used to generate file name. Needs to be set by the
-    #  containing/parent block.
-    #parent_name = ""
-
-    def save_to_resource(self, resource, room_start=0):
-        logging.debug("Saving junk data to resource. room_start: %s" % room_start)
-        super(JunkDataV4, self).save_to_resource(resource, room_start)
-
-    def generate_file_name(self):
-        return "00_junk.dmp"

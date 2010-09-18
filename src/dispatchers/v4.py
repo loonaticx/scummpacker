@@ -41,7 +41,7 @@ class BlockDispatcherV4(AbstractBlockDispatcher):
         "OC" : blocks.BlockOCV4, # object code
 #        "HD" : None, # room header
 
-        # Junk block
+        # Odd sound block in Loom CD
         "\x00\x00" : blocks.JunkDataV4
 
     }
@@ -90,10 +90,6 @@ class FileDispatcherV4(AbstractFileDispatcher):
         # - Sound blocks
         r"AD.dmp" : blocks.BlockDefaultV4,
         r"WA.dmp" : blocks.BlockDefaultV4,
-
-        # Junk data (appears between SO sounds and CO costumes in Loom CD)
-        r"00_junk.dmp" : blocks.JunkDataV4,
-
     }
     REGEX_BLOCKS = [
         # LECF
@@ -106,8 +102,8 @@ class FileDispatcherV4(AbstractFileDispatcher):
         # --ROOM
         # --scripts
         (re.compile(r"LS_[0-9]{3}\.dmp"), blocks.BlockLSV4),
-        # Junk data
-        #(re.compile(r"junk_.*\.dmp"), blocks.JunkDataV4)
+        # Odd sound data (appears between SO sounds and CO costumes in Loom CD)
+        (re.compile(r"00_[0-9]{3}\.dmp"), blocks.JunkDataV4),
     ]
     IGNORED_BLOCKS = frozenset([
         r"OBHD.xml",

@@ -41,6 +41,8 @@ def __test_unpack():
 
     logging.debug("Saving to files...")
     block.save_to_file(outpath)
+    
+    logging.debug("Finished saving to files.")
 
 def __test_pack():
     import dispatchers
@@ -63,6 +65,8 @@ def __test_pack():
     outpath_index = os.path.join(startpath, "outres.000")
     with file(outpath_index, 'wb') as outindres:
         index_block.save_to_resource(outindres)
+        
+    logging.debug("Finished saving to resources.")
     
 def __test():
     #__test_unpack()

@@ -19,12 +19,10 @@ class AbstractBlock(object):
 
     def load_from_resource(self, resource, room_start=0):
         start = resource.tell()
-        #logging.debug("Loading block from resource: " + str(start))
         self._read_header(resource, True)
         self._read_data(resource, start, True)
 
     def save_to_resource(self, resource, room_start=0):
-        #start = resource.tell()
         self._write_header(resource, True)
         self._write_data(resource, True)
 
@@ -40,7 +38,6 @@ class AbstractBlock(object):
         name = resource.read(self.block_name_length)
         if decrypt:
             name = util.crypt(name, self.crypt_value)
-        #logging.debug("Block name: " + str(name))
         return name
 
     def _read_size(self, resource, decrypt):
@@ -119,7 +116,6 @@ class BlockContainer(AbstractBlock):
         self.order_map = {}
 
     def _read_data(self, resource, start, decrypt):
-        #logging.debug("Reading children from container block...")
         end = start + self.size
         while resource.tell() < end:
             block = control.block_dispatcher.dispatch_next_block(resource)
@@ -131,11 +127,12 @@ class BlockContainer(AbstractBlock):
         # dumb crap here but I'm sick of working on this crappy piece of software
         if rank_lookup_name[:2] == "ZP" or rank_lookup_name[:2] == "IM":
             rank_lookup_name = rank_lookup_name[:2]
+        if rank_lookup_name == "\x00\x00":
+            rank_lookup_name = "00"
         return rank_lookup_name
 
     def _find_block_rank(self, block):
         rank_lookup_name = self._find_block_rank_lookup_name(block)
-        #logging.debug("Ordering block: %s" % (rank_lookup_name))
         block_rank = self.block_ordering.index(rank_lookup_name) # requires all block types are listed
         return block_rank
 
@@ -143,7 +140,6 @@ class BlockContainer(AbstractBlock):
         """Maintains sorted order for children."""
         rank_lookup_name = self._find_block_rank_lookup_name(block)
         block_rank = self._find_block_rank(block)
-        #logging.debug("Appending block: " + str(block.name))
 
         for i, c in enumerate(self.children):
             c_rank = self._find_block_rank(c)
@@ -163,10 +159,8 @@ class BlockContainer(AbstractBlock):
                     self.children.insert(i, block)
                     return # existing block comes after block being added
             elif c_rank > block_rank:
-                #logging.debug("rank_lookup_name: " + str(block.name) + ", c_rank: " + str(c_rank) + ", block_rank: " + str(block_rank))
                 self.children.insert(i, block)
                 return
-        #logging.debug("appending block, rank_lookup_name: " + str(block.name) + ", block_rank: " + str(block_rank))
         self.children.append(block)
 
     def save_to_file(self, path):
@@ -240,7 +234,6 @@ class BlockContainer(AbstractBlock):
                 order_list.append(util.xml2int(o.text))
             order_map[block_type] = order_list
 
-        #logging.debug(str(order_map))
         self.order_map = order_map
 
     def save_to_resource(self, resource, room_start=0):
@@ -282,18 +275,14 @@ class BlockGloballyIndexed(AbstractBlock):
         super(BlockGloballyIndexed, self).load_from_resource(resource)
         try:
             room_num = control.global_index_map.get_index(self.lf_name, room_start)
-            #logging.debug("room_num: %s" % room_num)
             room_offset = control.global_index_map.get_index(self.room_name, room_num) # HACK
-            #logging.debug("room_offset: %s" % room_offset)
-            #logging.debug("location - room_offset: %s" % (location - room_offset))
-            self.index = control.global_index_map.get_index(self.name,
+            self.index = control.global_index_map.get_index(self.lookup_name,
                                                              (room_num, location - room_offset))
-            #logging.debug("room_index: %s" % self.index)
         except util.ScummPackerUnrecognisedIndexException, suie:
             logging.error(("Block \"%s\" at offset %s has no entry in the index file (.000). " + 
                           "It can not be re-packed or used in the game.") % (self.name, location))
             self.is_unknown = True
-            self.index = control.unknown_blocks_counter.get_next_index(self.name)
+            self.index = control.unknown_blocks_counter.get_next_index(self.lookup_name)
 
     def save_to_resource(self, resource, room_start=0):
         # Look up the start of the current ROOM block, store
@@ -301,12 +290,9 @@ class BlockGloballyIndexed(AbstractBlock):
         # Later on, our directories will just treat global_index_map as a list of
         # tables and go through all of the values.
         location = resource.tell()
-        #logging.debug("Saving globally indexed block: " + self.name)
-        #logging.debug("LFLF: " + str(control.global_index_map.items("LFLF")))
-        #logging.debug("ROOM: " + str(control.global_index_map.items("ROOM")))
         room_num = control.global_index_map.get_index(self.lf_name, room_start)
         room_offset = control.global_index_map.get_index(self.room_name, room_num)
-        control.global_index_map.map_index(self.name,
+        control.global_index_map.map_index(self.lookup_name,
                                            (room_num, location - room_offset),
                                            self.index)
         super(BlockGloballyIndexed, self).save_to_resource(resource, room_start)
@@ -333,6 +319,14 @@ class BlockGloballyIndexed(AbstractBlock):
     def __repr__(self):
         return "[" + self.name + ":" + ("unk_" if self.is_unknown else "") + str(self.index).zfill(3) + "]"
 
+    @property
+    def lookup_name(self):
+        """ This method returns the name to be used when looking up/storing values in the global index map.
+        
+        This allows inheriting classes to specify a lookup name different to the block name."""
+        return self.name
+
+    
 class BlockLocalScript(AbstractBlock):
     name = None # override in concrete class
 
@@ -380,9 +374,6 @@ class BlockLucasartsEntertainmentContainer(BlockContainer):
 
         # process children
         for c in self.children:
-            #if hasattr(c, 'index'):
-            #    logging.debug("object " + str(c) + " has index " + str(c.index))
-            #logging.debug("location: " + str(resource.tell()))
             c.save_to_resource(resource, room_start)
 
         # go back and write size of LECF block (i.e. the whole ".001" file)
@@ -720,8 +711,6 @@ class BlockRoomIndexes(AbstractBlock):
 
     def save_to_resource(self, resource, room_start=0):
         """DROO blocks do not seem to be used in V5 games, so save dummy info."""
-#        room_num = control.global_index_map.get_index("LFLF", room_start)
-#        room_offset = control.global_index_map.get_index("ROOM", room_num)
         self.size = 5 * self.padding_length + 2 + self.block_name_length + 4
         self._write_header(resource, True)
         resource.write(util.int2str(self.padding_length, 2, crypt_val=self.crypt_value))
@@ -879,7 +868,6 @@ class ObjectBlockContainer(object):
         for objimage, objcode in self.objects.values():
             # New path name = Object ID + object name (removing trailing spaces)
             obj_path_name = str(objcode.obj_id).zfill(self.obj_id_name_length) + "_" + util.discard_invalid_chars(objcode.obj_name).rstrip()
-            #logging.debug("Writing object: %s" % obj_path_name)
             newpath = os.path.join(objects_path, obj_path_name)
             if not os.path.isdir(newpath):
                 os.mkdir(newpath) # throws an exception if can't create dir
@@ -901,7 +889,6 @@ class ObjectBlockContainer(object):
         # Write all image blocks first
         object_keys = util.ordered_sort(object_keys, self.order_map[self.obim_name])
         for obj_id in object_keys:
-            #logging.debug("Writing object image: " + str(obj_id))
             self.objects[obj_id][0].save_to_resource(resource, room_start)
 
     def _save_between_blocks_to_resource(self, resource, room_start):
@@ -913,14 +900,12 @@ class ObjectBlockContainer(object):
         # Write all object code/names
         object_keys = util.ordered_sort(object_keys, self.order_map[self.obcd_name])
         for obj_id in object_keys:
-            #logging.debug("Writing object code: " + str(objcode.obj_id))
             self.objects[obj_id][1].save_to_resource(resource, room_start)
 
     def _save_header_to_xml(self, path, objimage, objcode):
         # Save the joined header information as XML
         root = et.Element("object")
 
-        #shared = et.SubElement(root, "shared")
         et.SubElement(root, "name").text = util.escape_invalid_chars(objcode.obj_name)
         et.SubElement(root, "id").text = util.int2xml(objcode.obj_id)
 

@@ -211,7 +211,7 @@ class GlobalArguments(object):
         self.output_file_name = options.output_file_name
 
     def set_args(self, **kwds):
-        """ Used for unit testing."""
+        """ Used for old 'unit' testing."""
         super(GlobalArguments, self).__setattr__("unpack", kwds["unpack"])
         super(GlobalArguments, self).__setattr__("pack", kwds["pack"])
         super(GlobalArguments, self).__setattr__("scumm_version", kwds["scumm_version"])
