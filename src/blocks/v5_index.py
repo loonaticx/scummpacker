@@ -92,4 +92,18 @@ class BlockDROOV5(BlockRoomIndexes, BlockDefaultV5):
         "MI2" : 127,
         "FOA" : 99
     }
+    
+    def _read_data(self, resource, start, decrypt):
+        """We just don't care."""
+        pass    
+    
+    def save_to_resource(self, resource, room_start=0):
+        """DROO blocks do not seem to be used in V5 games, so save dummy info."""
+        self.size = 5 * self.padding_length + 2 + self.block_name_length + 4
+        self._write_header(resource, True)
+        resource.write(util.int2str(self.padding_length, 2, crypt_val=self.crypt_value))
+        for _ in xrange(self.padding_length): # this is "file/disk number" rather than "room number" in V4
+            resource.write(util.int2str(self.default_disk_or_room_number, 1, crypt_val=self.crypt_value))
+        for _ in xrange(self.padding_length):
+            resource.write(util.int2str(self.default_offset, 4, crypt_val=self.crypt_value))
 

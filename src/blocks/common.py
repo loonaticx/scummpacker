@@ -1,6 +1,6 @@
 #! /usr/bin/python
 import array
-import functools
+from collections import defaultdict
 import logging
 import os
 import re
@@ -95,7 +95,7 @@ class AbstractBlock(object):
         Not used by every block. To use it, the "xml_structure" property
         should be populated, and this method must be specifically called,
         either from a containing block, or from the "save_to_file" method."""
-        XMLHelper().write(self, parent_node, self.xml_structure)
+        util.xml_helper.write(self, parent_node, self.xml_structure)
 
     def read_xml_node(self, parent_node):
         """ Reads data from the given root node.
@@ -103,7 +103,7 @@ class AbstractBlock(object):
         Not used by every block. To use it, the "xml_structure" property
         should be populated, and this method must be specifically called,
         either from a containing block, or from the "save_to_resource" method."""
-        XMLHelper().read(self, parent_node, self.xml_structure)
+        util.xml_helper.read(self, parent_node, self.xml_structure)
 
 class BlockContainer(AbstractBlock):
     block_ordering = [
@@ -263,7 +263,7 @@ class BlockContainer(AbstractBlock):
 
 class BlockGloballyIndexed(AbstractBlock):
     lf_name = None # override in concrete class
-    room_name = None # override in concrete class
+    room_offset_name = None # override in concrete class
 
     def __init__(self, *args, **kwds):
         super(BlockGloballyIndexed, self).__init__(*args, **kwds)
@@ -275,7 +275,7 @@ class BlockGloballyIndexed(AbstractBlock):
         super(BlockGloballyIndexed, self).load_from_resource(resource)
         try:
             room_num = control.global_index_map.get_index(self.lf_name, room_start)
-            room_offset = control.global_index_map.get_index(self.room_name, room_num) # HACK
+            room_offset = control.global_index_map.get_index(self.room_offset_name, room_num)
             self.index = control.global_index_map.get_index(self.lookup_name,
                                                              (room_num, location - room_offset))
         except util.ScummPackerUnrecognisedIndexException, suie:
@@ -291,7 +291,7 @@ class BlockGloballyIndexed(AbstractBlock):
         # tables and go through all of the values.
         location = resource.tell()
         room_num = control.global_index_map.get_index(self.lf_name, room_start)
-        room_offset = control.global_index_map.get_index(self.room_name, room_num)
+        room_offset = control.global_index_map.get_index(self.room_offset_name, room_num)
         control.global_index_map.map_index(self.lookup_name,
                                            (room_num, location - room_offset),
                                            self.index)
@@ -455,7 +455,7 @@ class BlockLucasartsFile(BlockContainer, BlockGloballyIndexed):
 class BlockRoomOffsets(AbstractBlock):
     name = NotImplementedError("This property must be overridden by inheriting classes.") # string
     LFLF_NAME = NotImplementedError("This property must be overridden by inheriting classes.") # class name (string)
-    ROOM_NAME = NotImplementedError("This property must be overridden by inheriting classes.") # class name (string)
+    ROOM_OFFSET_NAME = NotImplementedError("This property must be overridden by inheriting classes.") # class name (string)
     OFFSET_POINTS_TO_ROOM = NotImplementedError("This property must be overridden by inheriting classes.") # boolean
 
     def _read_data(self, resource, start, decrypt):
@@ -474,7 +474,7 @@ class BlockRoomOffsets(AbstractBlock):
                                             crypt_val=(self.crypt_value if decrypt else None))
                 room_offset = lf_offset + 2 + self.block_name_length + 4 # add 2 bytes for the room number/index of LF block. 
             control.global_index_map.map_index(self.LFLF_NAME, lf_offset, room_no)
-            control.global_index_map.map_index(self.ROOM_NAME, room_no, room_offset) # HACK
+            control.global_index_map.map_index(self.ROOM_OFFSET_NAME, room_no, room_offset) # HACK
 
     def save_to_file(self, path):
         """Don't need to save offsets since they're calculated when packing."""
@@ -490,7 +490,7 @@ class BlockRoomOffsets(AbstractBlock):
         #  whereas the "write_dummy_block" just looks at the number passed in, which
         #  comes from the number of entries in the file system.
         if self.OFFSET_POINTS_TO_ROOM:
-            room_table = sorted(control.global_index_map.items(self.ROOM_NAME))
+            room_table = sorted(control.global_index_map.items(self.ROOM_OFFSET_NAME))
             num_of_rooms = len(room_table)
             resource.write(util.int2str(num_of_rooms, 1, crypt_val=self.crypt_value))
             for room_num, room_offset in room_table:
@@ -529,6 +529,7 @@ class BlockRoom(BlockContainer): # also globally indexed
     def _init_class_data(self):
         self.name = None
         self.lf_name = None
+        self.room_offset_name = None
         self.script_types = frozenset()
         self.object_types = frozenset()
         self.object_between_types = frozenset() # workaround for V4 "NL" and "SL"
@@ -566,7 +567,7 @@ class BlockRoom(BlockContainer): # also globally indexed
         location = resource.tell()
         room_num = control.global_index_map.get_index(self.lf_name, room_start)
         logging.debug("Saving room: %s" % room_num)
-        control.global_index_map.map_index(self.name, room_num, location)
+        control.global_index_map.map_index(self.room_offset_name, room_num, location)
         super(BlockRoom, self).save_to_resource(resource, room_start)
 
 
@@ -689,9 +690,9 @@ class BlockObjectIndexes(AbstractBlock):
             resource.write(util.int2str(class_data, self.class_data_size, crypt_val=self.crypt_value))
                 
 class BlockRoomIndexes(AbstractBlock):
-    """Directory of offsets to ROOM blocks.
+    """Directory of offsets to ROOM blocks. Also maps disk spanning.
     
-    Don't really seem to be used much for V5 and LOOM CD.
+    Don't really seem to be used much for V5 and LOOM CD. Is used in Monkey Island EGA/VGA.
 
     Each game seems to have a different padding length."""
     name = NotImplementedError("This property must be overridden by inheriting classes.")
@@ -700,24 +701,21 @@ class BlockRoomIndexes(AbstractBlock):
     default_offset = 0
 
     def __init__(self, *args, **kwds):
-        # default padding length is 127 for now
+        # Store a mapping of disk numbers to room numbers.
+        self.disk_spanning = defaultdict(list)
         self.padding_length = kwds.get('padding_length',
                                        self.DEFAULT_PADDING_LENGTHS[control.global_args.game])
         super(BlockRoomIndexes, self).__init__(*args, **kwds)
 
+    def _read_data(self, resource, start, decrypt):
+        raise NotImplementedError("This method must be overridden by inheriting classes.")       
+        
     def save_to_file(self, path):
         """This block is generated when saving to a resource."""
-        return
-
+        pass
+        
     def save_to_resource(self, resource, room_start=0):
-        """DROO blocks do not seem to be used in V5 games, so save dummy info."""
-        self.size = 5 * self.padding_length + 2 + self.block_name_length + 4
-        self._write_header(resource, True)
-        resource.write(util.int2str(self.padding_length, 2, crypt_val=self.crypt_value))
-        for _ in xrange(self.padding_length): # this is "file/disk number" rather than "room number" in V4
-            resource.write(util.int2str(self.default_disk_or_room_number, 1, crypt_val=self.crypt_value))
-        for _ in xrange(self.padding_length):
-            resource.write(util.int2str(self.default_offset, 4, crypt_val=self.crypt_value))
+        raise NotImplementedError("This method must be overridden by inheriting classes.")
 
 class BlockRoomHeader(AbstractBlock):
     name = NotImplementedError("This property must be overridden by inheriting classes.")
@@ -1065,40 +1063,25 @@ class ScriptBlockContainer(object):
         childstr.extend([str(c) for c in self.local_scripts])
         return "[Scripts, " + ", ".join(childstr) + "]"
 
-class XMLHelper(object):
+class ResourceFileContainer(object):
+    """ Handles splitting rooms/LECF blocks across mutliple disk/resource files."""
+    
+    map_name = "Disk"
+    
     def __init__(self):
-        self.read_actions = {
-            'i' : functools.partial(self._read_value_from_xml_node, marshaller=util.xml2int), # int
-            'h' : functools.partial(self._read_value_from_xml_node, marshaller=util.xml2int), # hex
-            's' : functools.partial(self._read_value_from_xml_node, marshaller=util.escape_invalid_chars), # string
-            'n' : self.read # node
-        }
-        self.write_actions = {
-            'i' : functools.partial(self._write_value_to_xml_node, marshaller=util.int2xml), # int
-            'h' : functools.partial(self._write_value_to_xml_node, marshaller=util.hex2xml), # hex
-            's' : functools.partial(self._write_value_to_xml_node, marshaller=util.unescape_invalid_chars), # string
-            'n' : self.write # node
-        }
+        self.disks = []
 
-    def read(self, destination, parent_node, structure):
-        for name, marshaller, attr in structure:
-            node = parent_node.find(name)
-            self.read_actions[marshaller](destination, node, attr)
+    def load_from_resource(self, resource, room_start=0):
+        pass
+    
+    def save_to_resource(self, resource, room_start=0):
+        pass
+    
+    def load_from_file(self, path):
+        pass
+    
+    def save_to_file(self, path):
+        pass
+    
+    
 
-    def _read_value_from_xml_node(self, destination, node, attr, marshaller):
-        value = marshaller(node.text) # doesn't support "attributes" of nodes, just values
-        # Get nested attributes
-        attr_split = attr.split(".")
-        destination = reduce(lambda a1, a2: getattr(a1, a2), attr_split[:-1], destination)
-        attr = attr_split[-1]
-        setattr(destination, attr, value)
-
-    def _write_value_to_xml_node(self, caller, node, attr, marshaller):
-        # Get nested attributes
-        attr = reduce(lambda a1, a2: getattr(a1, a2), attr.split("."), caller)
-        node.text = marshaller(attr)
-
-    def write(self, caller, parent_node, structure):
-        for name, marshaller, attr in structure:
-            node = et.SubElement(parent_node, name)
-            self.write_actions[marshaller](caller, node, attr)

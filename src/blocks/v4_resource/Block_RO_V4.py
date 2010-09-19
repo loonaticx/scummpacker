@@ -6,6 +6,7 @@ class BlockROV4(BlockRoom, BlockContainerV4): # also globally indexed
     def _init_class_data(self):
         self.name = "RO"
         self.lf_name = "LF"
+        self.room_offset_name = "FO"
         self.script_types = frozenset(["EN",
                                   "EX",
                                   "LS"])

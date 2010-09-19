@@ -1,6 +1,9 @@
 import array
-import string
 import copy
+import functools
+import string
+import xml.etree.ElementTree as et
+
 
 __valid_file_chars = frozenset("-_.() %s%s" % (string.ascii_letters, string.digits)) # for filenames
 __valid_text_chars = frozenset("!?@#$%s&*+\"';:,-_.() %s%s" % ("%", string.ascii_letters, string.digits)) # for XML files
@@ -117,6 +120,46 @@ def ordered_sort(in_list, order):
     deco = [ ((order.index(v) if v in order else INFINITY), i, v) for i, v in enumerate(in_list) ]
     deco.sort()
     return [ v for _, _, v in deco ]
+
+class XMLHelper(object):
+    def __init__(self):
+        self.read_actions = {
+            'i' : functools.partial(self._read_value_from_xml_node, marshaller=xml2int), # int
+            'h' : functools.partial(self._read_value_from_xml_node, marshaller=xml2int), # hex
+            's' : functools.partial(self._read_value_from_xml_node, marshaller=escape_invalid_chars), # string
+            'n' : self.read # node
+        }
+        self.write_actions = {
+            'i' : functools.partial(self._write_value_to_xml_node, marshaller=int2xml), # int
+            'h' : functools.partial(self._write_value_to_xml_node, marshaller=hex2xml), # hex
+            's' : functools.partial(self._write_value_to_xml_node, marshaller=unescape_invalid_chars), # string
+            'n' : self.write # node
+        }
+
+    def read(self, destination, parent_node, structure):
+        for name, marshaller, attr in structure:
+            node = parent_node.find(name)
+            self.read_actions[marshaller](destination, node, attr)
+
+    def _read_value_from_xml_node(self, destination, node, attr, marshaller):
+        value = marshaller(node.text) # doesn't support "attributes" of nodes, just values
+        # Get nested attributes
+        attr_split = attr.split(".")
+        destination = reduce(lambda a1, a2: getattr(a1, a2), attr_split[:-1], destination)
+        attr = attr_split[-1]
+        setattr(destination, attr, value)
+
+    def _write_value_to_xml_node(self, caller, node, attr, marshaller):
+        # Get nested attributes
+        attr = reduce(lambda a1, a2: getattr(a1, a2), attr.split("."), caller)
+        node.text = marshaller(attr)
+
+    def write(self, caller, parent_node, structure):
+        for name, marshaller, attr in structure:
+            node = et.SubElement(parent_node, name)
+            self.write_actions[marshaller](caller, node, attr)
+            
+xml_helper = XMLHelper()
 
 class ScummPackerException(Exception):
     pass

@@ -5,12 +5,13 @@ import blocks
 from common import *
 
 INDEXED_BLOCKS_V4 = (
+    "FO", # room offsets, for use in "FO" blocks.
     "RO", # rooms
     "LF", # lf
     "SC", # scripts
     "CO", # cosutmes
     "SO", # sounds
-    "RN" # room names
+    "RN", # room names
 )
 
 class BlockDispatcherV4(AbstractBlockDispatcher):

@@ -32,7 +32,7 @@ class BlockDefaultV4(AbstractBlock):
 
 class BlockGloballyIndexedV4(BlockGloballyIndexed, BlockDefaultV4):
     lf_name = "LF"
-    room_name = "RO"
+    room_offset_name = "FO"
 
 class BlockContainerV4(BlockContainer, BlockDefaultV4):
     block_ordering = [
@@ -95,11 +95,11 @@ class BlockContainerV4(BlockContainer, BlockDefaultV4):
 class BlockIndexDirectoryV4(BlockIndexDirectory, BlockDefaultV4):
     """ Generic index directory """
     DIR_TYPES = {
-        "0R" : "RO",
+        #"0R" : "RO", # handled separately
         "0S" : "SC",
         "0N" : "SO",
         "0C" : "CO",
-        #"0O" : "OB" # handled specifically.
+        #"0O" : "OB" # handled seperately
     }
     MIN_ENTRIES = {
         "LOOMCD" : {

@@ -144,7 +144,11 @@ class GlobalArguments(object):
     def set_output_file_name(self, output_file_name):
         # @type output_file_name str
         if not os.path.isdir(output_file_name):
-            raise util.ScummPackerException("Path does not exist, or is not a directory: %s" % output_file_name)
+            try:
+                os.mkdir(control.global_args.output_file_name)
+            except OSError:
+                raise util.ScummPackerException("Could not create output directory: " +
+                                        str(output_file_name))
         self._output_file_name = output_file_name
 
     output_file_name = property((lambda self: self._output_file_name), set_output_file_name)

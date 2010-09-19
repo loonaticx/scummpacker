@@ -4,7 +4,6 @@ import os
 import struct
 import xml.etree.ElementTree as et
 import scummpacker_util as util
-from blocks.common import XMLHelper
 from blocks.v4_base import BlockDefaultV4
 
 class BlockOCV4(BlockDefaultV4):
@@ -93,7 +92,7 @@ class BlockOCV4(BlockDefaultV4):
         self.obj_name = '' if name is None else util.unescape_invalid_chars(name)
         self.obj_name = self.obj_name if self.obj_name != None else ""
 
-        XMLHelper().read(self, root, self.xml_structure)
+        util.xml_helper.read(self, root, self.xml_structure)
 
     def _load_script_from_file(self, path):
         with file(path, 'rb') as script_file:

@@ -20,8 +20,19 @@ class Block0RV4(BlockRoomIndexes, BlockDefaultV4):
     default_disk_or_room_number = 1
     default_offset = 0
 
+    def _read_data(self, resource, start, decrypt):
+        """Read the disk spanning for each room."""
+        num_items = util.str2int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
+        
+        # Read all owner+state values
+        for room_num in xrange(num_items):
+            disk_num = util.str2int(resource.read(1), crypt_val=(self.crypt_value if decrypt else None))
+            offset = util.str2int(resource.read(4), util.LE, crypt_val=(self.crypt_value if decrypt else None)) # always 0
+            if disk_num != 0:
+                self.disk_spanning[disk_num].append(room_num)
+            
     def save_to_resource(self, resource, room_start=0):
-        """0R blocks do not seem to be used in V4 games, so save dummy info."""
+        """TODO: 0R blocks store disk spanning information."""
         table_entry_length = 5
         num_items_length = 2
         block_size_length = 4
@@ -29,7 +40,7 @@ class Block0RV4(BlockRoomIndexes, BlockDefaultV4):
                     num_items_length + self.block_name_length + block_size_length
         self._write_header(resource, True)
         resource.write(util.int2str(self.padding_length, 2, crypt_val=self.crypt_value))
-        for _ in xrange(self.padding_length): # this is "file/disk number" rather than "room number" in V4
+        for _ in xrange(self.padding_length): # this is "file/disk number" in V4, rather than "room number"
             resource.write(util.int2str(self.default_disk_or_room_number, 1, crypt_val=self.crypt_value))
             resource.write(util.int2str(self.default_offset, 4, crypt_val=self.crypt_value))
     

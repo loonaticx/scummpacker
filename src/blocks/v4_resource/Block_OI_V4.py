@@ -4,7 +4,6 @@ import os
 import struct
 import xml.etree.ElementTree as et
 import scummpacker_util as util
-from blocks.common import XMLHelper
 from blocks.v4_base import BlockDefaultV4
 
 class BlockOIV4(BlockDefaultV4):
@@ -59,5 +58,3 @@ class BlockOIV4(BlockDefaultV4):
         # block header + header data + data size
         return 6 + 2 + len(self.data)
 
-    def generate_xml_node(self, parent_node):
-        XMLHelper().write(self, parent_node, self.xml_structure)

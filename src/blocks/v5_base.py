@@ -57,7 +57,7 @@ class BlockSoundV5(BlockDefaultV5):
 
 class BlockGloballyIndexedV5(BlockGloballyIndexed, BlockDefaultV5):
     lf_name = "LFLF"
-    room_name = "ROOM"
+    room_offset_name = "ROOM"
 
 class BlockContainerV5(BlockContainer, BlockDefaultV5):
     block_ordering = [
@@ -193,12 +193,12 @@ class BlockMIDISoundV5(BlockSoundV5):
 
 class BlockIndexDirectoryV5(BlockIndexDirectory, BlockDefaultV5):
     DIR_TYPES = {
-        "DROO" : "ROOM",
+        #"DROO" : "ROOM", # handled separately.
         "DSCR" : "SCRP",
         "DSOU" : "SOUN",
         "DCOS" : "COST",
         "DCHR" : "CHAR"
-        #"DOBJ" : "OBCD" # handled specifically.
+        #"DOBJ" : "OBCD" # handled separately.
     }
     MIN_ENTRIES = {
         "MI1CD" : {
