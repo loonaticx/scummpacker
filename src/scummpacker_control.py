@@ -71,7 +71,7 @@ class IndexMappingContainer(object):
     
 class GlobalArguments(object):
     RESOURCE_FILE_NAME_MAP = {
-        "LOOMCD" : "DISK01.LEC",
+        "LOOMCD" : "DISK01",
         "MI1CD" : "MONKEY",
         "MI2" : "MONKEY2",
         "FOA" : "ATLANTIS"
@@ -82,28 +82,28 @@ class GlobalArguments(object):
         "MI2" : "5",
         "FOA" : "5"
     }
-    DEFAULT_SCUMM_VERSION_GAMES = {
+    DEFAULT_GAME_FOR_SCUMM_VERSION = {
         "4" : "LOOMCD", # hm...
         "5" : "MI2"
     }
     DEFAULT_GAME_FOR_UNKNOWN_SCUMM_VERSION = "MI2"
 
     def __init__(self):
-        super(GlobalArguments, self).__setattr__("scumm_version", None)
-        super(GlobalArguments, self).__setattr__("game", None)
-        super(GlobalArguments, self).__setattr__("input_file_name", None)
-        super(GlobalArguments, self).__setattr__("output_file_name", None)
-        super(GlobalArguments, self).__setattr__("unpack", None)
-        super(GlobalArguments, self).__setattr__("pack", None)
+        self._scumm_version = None
+        self._game = None
+        self._input_file_name = None
+        self._output_file_name = None
+        self._unpack = None
+        self._pack = None
         self.oparser = OptionParser(usage="%prog [options]",
                                version="ScummPacker v3",
                                description="Packs and unpacks resources used by LucasArts adventure games.")
         self.oparser.add_option("-v", "--scumm-version", action="store",
                            dest="scumm_version",
-                           choices=self.DEFAULT_SCUMM_VERSION_GAMES.keys(),
+                           choices=self.DEFAULT_GAME_FOR_SCUMM_VERSION.keys(),
                            help="Specify the SCUMM version to target. " +
                            "Possible options are: " +
-                           ", ".join(self.DEFAULT_SCUMM_VERSION_GAMES.keys()) + ". ")
+                           ", ".join(self.DEFAULT_GAME_FOR_SCUMM_VERSION.keys()) + ". ")
         self.oparser.add_option("-g", "--game", action="store",
                            dest="game",
                            choices=self.SCUMM_VERSION_GAME_MAP.keys(),
@@ -112,92 +112,66 @@ class GlobalArguments(object):
                            ", ".join(self.SCUMM_VERSION_GAME_MAP.keys()) + ". ")
         self.oparser.add_option("-i", "--input", action="store",
                            dest="input_file_name",
-                           help="Specify an input file name. " +
-                           "If not specified, ScummPacker will try to guess.")
+                           help="Specify an input path, containing game resources.")
         self.oparser.add_option("-o", "--output", action="store",
                            dest="output_file_name",
-                           help="Specify an output base file name (will have .000 and .001 appended). " +
-                           "If not specified, ScummPacker will generate one.")
+                           help="Specify an output path.")
         self.oparser.add_option("-u", "--unpack", action="store_true",
                            dest="unpack", default=False,
                            help="Unpack resources.")
         self.oparser.add_option("-p", "--pack", action="store_true",
                            dest="pack", default=False,
                            help="Pack resources.")
-        self.oparser.set_defaults(scumm_version="5", game="MI2", output_file_name="outres")
+        #self.oparser.set_defaults(scumm_version="5", game="MI2", output_file_name="outres")
 
     def set_scumm_version(self, scumm_version):
-        super(GlobalArguments, self).__setattr__("scumm_version",
-                    scumm_version)
-        if self.game != None:
-            if self.SCUMM_VERSION_GAME_MAP[self.game] != scumm_version:
-                raise util.ScummPackerException("A conflicting SCUMM version and game ID was specified.")
-        elif not scumm_version in self.DEFAULT_SCUMM_VERSION_GAMES:
-            super(GlobalArguments, self).__setattr__("game",
-                    self.DEFAULT_GAME_FOR_UNKNOWN_SCUMM_VERSION)
-        else:
-            super(GlobalArguments, self).__setattr__("game",
-                    self.DEFAULT_SCUMM_VERSION_GAMES[scumm_version])
+        self._scumm_version = scumm_version
 
+    scumm_version = property((lambda self: self._scumm_version), set_scumm_version)
+            
     def set_game(self, game):
-        super(GlobalArguments, self).__setattr__("game",
-                    game)
-        if self.scumm_version != None:
-            if self.SCUMM_VERSION_GAME_MAP[self.game] != self.scumm_version:
-                raise util.ScummPackerException("A conflicting SCUMM version and game ID was specified.")
-        elif not game in self.SCUMM_VERSION_GAME_MAP:
-            raise util.ScummPackerException("Unknown or unsupported game ID: " + str(game))
-        else:
-            super(GlobalArguments, self).__setattr__("scumm_version",
-                    self.SCUMM_VERSION_GAME_MAP[game])
+        self._game = game
 
+    game = property((lambda self: self._game), set_game)
+            
     def set_input_file_name(self, input_file_name):
-        if self.unpack:
-            if input_file_name == None:
-                if self.game == None:
-                    raise util.ScummPackerException("No game specified; can't guess input file name.")
-                super(GlobalArguments, self).__setattr__("input_file_name",
-                        self.RESOURCE_FILE_NAME_MAP[self.game])
-            elif os.path.isdir(input_file_name):
-                if self.game == None:
-                    raise util.ScummPackerException("No game specified; can't guess input file name.")
-                super(GlobalArguments, self).__setattr__("input_file_name",
-                        os.path.join(os.path.splitext(input_file_name)[0], self.RESOURCE_FILE_NAME_MAP[self.game]))
-            else:
-                super(GlobalArguments, self).__setattr__("input_file_name",
-                        os.path.splitext(input_file_name)[0])
-        elif self.pack:
-            if input_file_name == None:
-                raise util.ScummPackerException("No input directory specified.")
-            elif not os.path.isdir(input_file_name):
-                raise util.ScummPackerException("Input does not appear to be a valid directory.")
-            else:
-                super(GlobalArguments, self).__setattr__("input_file_name",
-                        input_file_name)
+        if not os.path.isdir(input_file_name):
+            raise util.ScummPackerException("Path does not exist, or is not a directory: %s" % input_file_name)
+        self._input_file_name = input_file_name
 
+    input_file_name = property((lambda self: self._input_file_name), set_input_file_name)
+    
     def set_output_file_name(self, output_file_name):
         # @type output_file_name str
-        if self.unpack:
-            super(GlobalArguments, self).__setattr__("output_file_name",
-                        output_file_name)
-        elif self.pack:
-            if output_file_name.endswith('.000') or output_file_name.endswith('.001'):
-                output_file_name = output_file_name[:-4]
-            super(GlobalArguments, self).__setattr__("output_file_name",
-                        output_file_name)
+        if not os.path.isdir(output_file_name):
+            raise util.ScummPackerException("Path does not exist, or is not a directory: %s" % output_file_name)
+        self._output_file_name = output_file_name
 
-    def __setattr__(self, item, value):
-        if item == "game":
-            self.set_game(value)
-        elif item == "scumm_version":
-            self.set_scumm_version(value)
-        elif item == "input_file_name":
-            self.set_input_file_name(value)
-        elif item == "output_file_name":
-            self.set_output_file_name(value)
-        else:
-            super(GlobalArguments, self).__setattr__(item, value)
+    output_file_name = property((lambda self: self._output_file_name), set_output_file_name)
 
+    def validate_scumm_version_and_game(self):
+        # Must specify either game or SCUMM version.
+        if self.scumm_version is None and self.game is None:
+            raise util.ScummPackerException("You must specify either a game or a SCUMM version number.")
+        
+        # If game is not specified, use the default game for that SCUMM version.
+        if self.game is None:
+            try:
+                self._game = self.DEFAULT_GAME_FOR_SCUMM_VERSION[self._scumm_version]
+            except KeyError:
+                raise util.ScummPackerException("Unrecognised SCUMM version specified: %s." % self._scumm_version)
+            
+        if self.scumm_version is None:
+            try:
+                self._scumm_version = self.SCUMM_VERSION_GAME_MAP[self._game]
+            except KeyError:
+                raise util.ScummPackerException("Unrecognised game specified: %s." % self._game)
+                
+        # If both game and SCUMM version specified, verify that it's a valid combination.
+        if self.SCUMM_VERSION_GAME_MAP[self.game] != self.scumm_version:
+            raise util.ScummPackerException("A conflicting SCUMM version and game ID was specified. version: %s, game: %s." % (self.scumm_version, self.game))
+        
+    
     def parse_args(self):
         options, args = self.oparser.parse_args()
         # @type options Values
@@ -207,17 +181,21 @@ class GlobalArguments(object):
         self.pack = options.pack
         self.scumm_version = options.scumm_version
         self.game = options.game
+        self.validate_scumm_version_and_game()
         self.input_file_name = options.input_file_name
         self.output_file_name = options.output_file_name
+        
 
     def set_args(self, **kwds):
         """ Used for old 'unit' testing."""
-        super(GlobalArguments, self).__setattr__("unpack", kwds["unpack"])
-        super(GlobalArguments, self).__setattr__("pack", kwds["pack"])
-        super(GlobalArguments, self).__setattr__("scumm_version", kwds["scumm_version"])
-        super(GlobalArguments, self).__setattr__("game", kwds["game"])
-        super(GlobalArguments, self).__setattr__("input_file_name", kwds["input_file_name"])
-        super(GlobalArguments, self).__setattr__("output_file_name", kwds["output_file_name"])
+        self._scumm_version = kwds["scumm_version"]
+        self._game = kwds["game"]
+        self.validate_scumm_version_and_game()
+        self._input_file_name = kwds["input_file_name"]
+        self._output_file_name = kwds["output_file_name"]
+        self._unpack = kwds["unpack"]
+        self._pack = kwds["pack"]
+        
 
     def print_help(self):
         self.oparser.print_help()

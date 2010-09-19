@@ -19,7 +19,7 @@ class BlockDispatcherV4(AbstractBlockDispatcher):
     BLOCK_NAME_LENGTH = 2
     BLOCK_MAP = {
        # Container blocks
-        "LE" : blocks.BlockContainerV4, # main container (Lucasarts Entertainment)
+        "LE" : blocks.BlockLEV4, # main container (Lucasarts Entertainment)
         "LF" : blocks.BlockLFV4, # contains rooms and global resources
         "RO" : blocks.BlockROV4, # room
 #
@@ -49,7 +49,7 @@ class BlockDispatcherV4(AbstractBlockDispatcher):
         #(re.compile(r"IM[0-9]{2}"), blocks.BlockContainerV4)
     ]
     DEFAULT_BLOCK = blocks.BlockDefaultV4
-    ROOT_BLOCK = blocks.BlockDefaultV4
+    ROOT_BLOCK = blocks.BlockLEV4
 
     def _read_block_name(self, resource):
         """ SCUMM v3 and v4 stores block size before the block name."""

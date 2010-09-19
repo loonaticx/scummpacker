@@ -7,7 +7,7 @@ from v5 import *
 class DispatcherFactory(object):
     # SCUMM engine version : index dispatcher (combined block & file), resource block dispatcher, resource file dispatcher, iterable list of names of globally indexed blocks
     grammars = {
-        "4" : (IndexBlockContainerV4, BlockDispatcherV4, None, INDEXED_BLOCKS_V4),
+        "4" : (IndexBlockContainerV4, BlockDispatcherV4, FileDispatcherV4, INDEXED_BLOCKS_V4),
         "5" : (IndexBlockContainerV5, BlockDispatcherV5, FileDispatcherV5, INDEXED_BLOCKS_V5)
     }
 
