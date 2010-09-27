@@ -148,7 +148,7 @@ class BlockMIDISoundV5(BlockSoundV5):
         self.mdhd_header = mdhd_data
         self.size = os.path.getsize(path) # size does not include ADL/ROL block header
         midi_file = file(path, 'rb')
-        self._read_data(midi_file, 0, False)
+        self._read_data(midi_file, 0, False, room_start)
         midi_file.close()
 
     def save_to_file(self, path):
@@ -221,7 +221,7 @@ class BlockIndexDirectoryV5(BlockIndexDirectory, BlockDefaultV5):
         }
     }
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         num_items = util.str2int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
         room_nums = []
         i = num_items

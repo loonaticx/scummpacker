@@ -6,7 +6,7 @@ class BlockSBLV5(BlockSoundV5):
     name = "SBL"
     AU_HEADER = "AUhd\x00\x00\x00\x03\x00\x00\x80AUdt"
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         # SBL blocks have AUhd and AUdt headers instead of
         #  "Creative Voice File".
         # Skip AUhd/AUdt and just read the rest of the raw data,

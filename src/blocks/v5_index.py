@@ -12,7 +12,7 @@ class BlockRNAMV5(BlockRoomNames, BlockDefaultV5):
 class BlockMAXSV5(BlockDefaultV5):
     name = "MAXS"
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         """
         Block Name         (4 bytes)
         Block Size         (4 bytes BE)
@@ -93,7 +93,7 @@ class BlockDROOV5(BlockRoomIndexes, BlockDefaultV5):
         "FOA" : 99
     }
     
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         """We just don't care."""
         pass    
     

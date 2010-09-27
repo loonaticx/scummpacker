@@ -21,6 +21,12 @@ def main():
         logging.level = logging.NORMAL
         # Delegate argument parsing to the global arguments container
         control.global_args.parse_args()
+        args_validation = control.global_args.validate_args()
+
+        if args_validation is not None:
+            logging.error(args_validation)
+            control.global_args.print_help()
+            return 1
 
         if control.global_args.unpack:
             logging.normal("Starting game resource unpacking.")
@@ -47,11 +53,6 @@ def main():
             res_handler.global_res_handler.pack()
             logging.normal("Finished!")
             return 0
-
-        else:
-            logging.error("Please specify whether to pack or unpack SCUMM resources.")
-            control.global_args.print_help()
-            return 1
         
     except Exception, e:
         logging.error("Unhandled exception occured: " + str(e))

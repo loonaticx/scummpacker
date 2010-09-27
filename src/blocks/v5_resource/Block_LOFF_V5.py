@@ -6,3 +6,4 @@ class BlockLOFFV5(BlockRoomOffsets, BlockDefaultV5):
     LFLF_NAME = "LFLF"
     ROOM_NAME = "ROOM"
     OFFSET_POINTS_TO_ROOM = True
+    disk_lookup_name = "Disk"

@@ -62,10 +62,11 @@ class BlockContainerV4(BlockContainer, BlockDefaultV4):
          "scripts",
         # Inside LF again
         "SC", # script
-        "SO", # sound
-         # Inside SO
+         # Inside SO - must go before "SO" to support nested "SO" blocks
          "WA", # voc
          "AD", # adlib
+        "SO", # sound
+
         "00", # junk/odd sound data
         "CO", # costume
     ]
@@ -74,21 +75,22 @@ class BlockContainerV4(BlockContainer, BlockDefaultV4):
     #  the block name should be). However, these locations are referenced in the "0N" index,
     #  so they must be sounds. I think they match the CD-track format "SOUN" blocks in 
     #  Monkey Island 1 CD (which is SCUMM V5), though I haven't confirmed.
-    junk_sound_locations = {
-        63314 : 24, # Loom CD
-        3601305 : 24, # Loom CD
-    }
+#    junk_sound_locations = {
+#        63314 : 24, # Loom CD
+#        3601305 : 24, # Loom CD
+#    }
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         """Also, first LF file seems to store (junk?) data after the last child block, at least
         for LOOM CD and Monkey Island 1."""
         #logging.debug("Reading children from container block...")
         end = start + self.size
+        #logging.debug("%s container has start value: %s" % (self.name, start))
         while resource.tell() < end:
-            if resource.tell() in self.junk_sound_locations:
-                logging.debug("Found known junk sound at offset: %d" % resource.tell() )
+#            if resource.tell() in self.junk_sound_locations:
+#                logging.debug("Found known junk sound at offset: %d" % resource.tell() )
             block = control.block_dispatcher.dispatch_next_block(resource)
-            block.load_from_resource(resource, start)
+            block.load_from_resource(resource, room_start)
             self.append(block)
             
 
@@ -106,10 +108,20 @@ class BlockIndexDirectoryV4(BlockIndexDirectory, BlockDefaultV4):
             "0S" : 199,
             "0N" : 199,
             "0C" : 199
-        }
+        },
+        "MI1VGA" : {
+            "0S" : 199,
+            "0N" : 199,
+            "0C" : 199
+        },
+        "MI1EGA" : {
+            "0S" : 199, # TODO: confirm these values
+            "0N" : 199, # TODO: confirm these values
+            "0C" : 199  # TODO: confirm these values
+        },
     }
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         num_items = util.str2int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
         room_nums = []
         offsets = []

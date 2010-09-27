@@ -24,7 +24,7 @@ class BlockOCV4(BlockDefaultV4):
         ),
     )
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         """
           obj id    : 16le
           unknown   : 8

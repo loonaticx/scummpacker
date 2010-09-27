@@ -12,7 +12,8 @@ INDEXED_BLOCKS_V5 = (
     "SCRP",
     "SOUN",
     "LFLF",
-    "RNAM"
+    "RNAM",
+    "Disk" # for disk spanning info. Could use "LECF"
 )
 
 class BlockDispatcherV5(AbstractBlockDispatcher):

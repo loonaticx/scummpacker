@@ -70,13 +70,9 @@ class IndexMappingContainer(object):
         return self.index_map[map_name].items()
     
 class GlobalArguments(object):
-    RESOURCE_FILE_NAME_MAP = {
-        "LOOMCD" : "DISK01",
-        "MI1CD" : "MONKEY",
-        "MI2" : "MONKEY2",
-        "FOA" : "ATLANTIS"
-    }
     SCUMM_VERSION_GAME_MAP = {
+        "MI1EGA" : "4",
+        "MI1VGA" : "4",
         "LOOMCD" : "4",
         "MI1CD" : "5",
         "MI2" : "5",
@@ -135,20 +131,12 @@ class GlobalArguments(object):
     game = property((lambda self: self._game), set_game)
             
     def set_input_file_name(self, input_file_name):
-        if not os.path.isdir(input_file_name):
-            raise util.ScummPackerException("Path does not exist, or is not a directory: %s" % input_file_name)
         self._input_file_name = input_file_name
 
     input_file_name = property((lambda self: self._input_file_name), set_input_file_name)
     
     def set_output_file_name(self, output_file_name):
         # @type output_file_name str
-        if not os.path.isdir(output_file_name):
-            try:
-                os.mkdir(control.global_args.output_file_name)
-            except OSError:
-                raise util.ScummPackerException("Could not create output directory: " +
-                                        str(output_file_name))
         self._output_file_name = output_file_name
 
     output_file_name = property((lambda self: self._output_file_name), set_output_file_name)
@@ -156,26 +144,43 @@ class GlobalArguments(object):
     def validate_scumm_version_and_game(self):
         # Must specify either game or SCUMM version.
         if self.scumm_version is None and self.game is None:
-            raise util.ScummPackerException("You must specify either a game or a SCUMM version number.")
+            return "You must specify either a game or a SCUMM version number."
         
         # If game is not specified, use the default game for that SCUMM version.
         if self.game is None:
             try:
                 self._game = self.DEFAULT_GAME_FOR_SCUMM_VERSION[self._scumm_version]
             except KeyError:
-                raise util.ScummPackerException("Unrecognised SCUMM version specified: %s." % self._scumm_version)
+                return "Unrecognised SCUMM version specified: %s." % self._scumm_version
             
         if self.scumm_version is None:
             try:
                 self._scumm_version = self.SCUMM_VERSION_GAME_MAP[self._game]
             except KeyError:
-                raise util.ScummPackerException("Unrecognised game specified: %s." % self._game)
+                return "Unrecognised game specified: %s." % self._game
                 
         # If both game and SCUMM version specified, verify that it's a valid combination.
         if self.SCUMM_VERSION_GAME_MAP[self.game] != self.scumm_version:
-            raise util.ScummPackerException("A conflicting SCUMM version and game ID was specified. version: %s, game: %s." % (self.scumm_version, self.game))
-        
-    
+            return "A conflicting SCUMM version and game ID was specified. version: %s, game: %s." % (self.scumm_version, self.game)
+        return None
+
+    def validate_args(self):
+        result = self.validate_scumm_version_and_game()
+        if result != None:
+            return result
+        # validate that either pack or unpack is chosen
+        if not self.pack and not self.unpack:
+            return "Please specify whether to pack or unpack SCUMM resources."
+        # Validate input and output paths
+        if not os.path.isdir(self.input_file_name):
+            return "Path does not exist, or is not a directory: %s" % self.input_file_name
+        if not os.path.isdir(self.output_file_name):
+            try:
+                os.mkdir(self.output_file_name)
+            except OSError:
+                return "Could not create output directory: " + str(self.output_file_name)
+        return None
+
     def parse_args(self):
         options, args = self.oparser.parse_args()
         # @type options Values
@@ -185,7 +190,6 @@ class GlobalArguments(object):
         self.pack = options.pack
         self.scumm_version = options.scumm_version
         self.game = options.game
-        self.validate_scumm_version_and_game()
         self.input_file_name = options.input_file_name
         self.output_file_name = options.output_file_name
         
@@ -208,6 +212,7 @@ class GlobalArguments(object):
 global_args = GlobalArguments()
 
 unknown_blocks_counter = IndexCounter()
+disk_spanning_counter = 0 # stores which disk/resource file we're looking at.
 global_index_map = IndexMappingContainer()
 index_dispatcher = None
 block_dispatcher = None

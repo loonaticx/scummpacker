@@ -6,7 +6,7 @@ from Block_IMHD_V5 import BlockIMHDV5
 class BlockOBIMV5(BlockContainerV5):
     name = "OBIM"
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         end = start + self.size
 
         # Load the header

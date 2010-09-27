@@ -11,7 +11,7 @@ class BlockOIV4(BlockDefaultV4):
     name = "OI"
     xml_structure = tuple()
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         data = resource.read(2)
         if decrypt:
             data = util.crypt(data, self.crypt_value)

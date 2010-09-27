@@ -1,4 +1,6 @@
-#! /usr/bin/python
+#! /usr/bin/
+import scummpacker_control as control
+import scummpacker_util as util
 from v4_base import *
 
 class BlockRNV4(BlockRoomNames, BlockDefaultV4):
@@ -14,13 +16,16 @@ class Block0RV4(BlockRoomIndexes, BlockDefaultV4):
 
     TODO: load a separate "disk/room mapping" XML file."""
     name = "0R"
+    disk_lookup_name = "Disk"
     DEFAULT_PADDING_LENGTHS = {
-        "LOOMCD" : 99
+        "LOOMCD" : 99,
+        "MI1VGA" : 99,
+        "MI1EGA" : 99,
     }
-    default_disk_or_room_number = 1
+    default_disk_or_room_number = 0
     default_offset = 0
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         """Read the disk spanning for each room."""
         num_items = util.str2int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
         
@@ -32,7 +37,7 @@ class Block0RV4(BlockRoomIndexes, BlockDefaultV4):
                 self.disk_spanning[disk_num].append(room_num)
             
     def save_to_resource(self, resource, room_start=0):
-        """TODO: 0R blocks store disk spanning information."""
+        """0R blocks store mappings of rooms to disks/resource files."""
         table_entry_length = 5
         num_items_length = 2
         block_size_length = 4
@@ -40,15 +45,20 @@ class Block0RV4(BlockRoomIndexes, BlockDefaultV4):
                     num_items_length + self.block_name_length + block_size_length
         self._write_header(resource, True)
         resource.write(util.int2str(self.padding_length, 2, crypt_val=self.crypt_value))
-        for _ in xrange(self.padding_length): # this is "file/disk number" in V4, rather than "room number"
-            resource.write(util.int2str(self.default_disk_or_room_number, 1, crypt_val=self.crypt_value))
+        for room_num in xrange(self.padding_length): # this is "file/disk number" in V4, rather than "room number"
+            #if
+            try:
+                disk_number = control.global_index_map.get_index(self.disk_lookup_name, room_num)
+            except util.ScummPackerUnrecognisedIndexException:
+                disk_number = self.default_disk_or_room_number
+            resource.write(util.int2str(disk_number, 1, crypt_val=self.crypt_value))
             resource.write(util.int2str(self.default_offset, 4, crypt_val=self.crypt_value))
     
 class Block0OV4(BlockObjectIndexes, BlockDefaultV4):
     name = "0O"
     class_data_size = 3
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         num_items = util.str2int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
         self.objects = []
         # Read all owner+state and class data values

@@ -6,7 +6,7 @@ from Block_OBNA_V5 import BlockOBNAV5
 class BlockOBCDV5(BlockContainerV5):
     name = "OBCD"
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         end = start + self.size
         block = BlockCDHDV5(self.block_name_length, self.crypt_value)
         block.load_from_resource(resource)

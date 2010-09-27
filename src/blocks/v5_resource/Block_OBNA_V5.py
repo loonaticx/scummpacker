@@ -6,7 +6,7 @@ from blocks.v5_base import BlockDefaultV5
 class BlockOBNAV5(BlockDefaultV5):
     name = "OBNA"
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         data = resource.read(self.size - (resource.tell() - start))
         if decrypt:
             data = util.crypt(data, self.crypt_value)

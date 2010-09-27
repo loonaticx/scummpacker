@@ -18,3 +18,4 @@ class BlockROOMV5(BlockRoom, BlockContainerV5): # also globally indexed
         self.num_scripts_type = "NLSC"
         self.script_container_class = ScriptBlockContainerV5
         self.object_container_class = ObjectBlockContainerV5
+        self.dodgy_offsets = {}

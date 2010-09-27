@@ -18,7 +18,7 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
         super(BlockSOUNV5, self).__init__(*args, **kwds)
         self.is_cd_track = False
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         # Not a great way of checking this, since we will try to interpret legit
         # block names as a number.
         # cd_block_size should always be 24 if it's CD track block.
@@ -79,7 +79,7 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
             self.children = []
             soun_file = file(path, 'rb')
             self._read_header(soun_file, False)
-            self._read_data(soun_file, 0, False)
+            self._read_data(soun_file, 0, False, room_start)
             soun_file.close()
 
     def generate_file_name(self):

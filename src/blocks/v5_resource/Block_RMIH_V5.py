@@ -9,7 +9,7 @@ class BlockRMIHV5(BlockDefaultV5):
         ("num_zbuffers", 'i', 'num_zbuffers'),
     )
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         """
         Assumes it's reading from a resource.
         num_zbuffers 16le

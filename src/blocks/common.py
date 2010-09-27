@@ -20,7 +20,8 @@ class AbstractBlock(object):
     def load_from_resource(self, resource, room_start=0):
         start = resource.tell()
         self._read_header(resource, True)
-        self._read_data(resource, start, True)
+        #logging.debug("%s loading from room start %s" % (self.name, room_start))
+        self._read_data(resource, start, True, room_start)
 
     def save_to_resource(self, resource, room_start=0):
         self._write_header(resource, True)
@@ -30,7 +31,7 @@ class AbstractBlock(object):
         # Different in old format resources
         raise NotImplementedError("This method must be overriden by a concrete class.")
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         data = self._read_raw_data(resource, self.size - (resource.tell() - start), decrypt)
         self.data = data
 
@@ -115,11 +116,11 @@ class BlockContainer(AbstractBlock):
         self.children = []
         self.order_map = {}
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         end = start + self.size
         while resource.tell() < end:
             block = control.block_dispatcher.dispatch_next_block(resource)
-            block.load_from_resource(resource, start)
+            block.load_from_resource(resource, room_start)
             self.append(block)
 
     def _find_block_rank_lookup_name(self, block):
@@ -264,6 +265,7 @@ class BlockContainer(AbstractBlock):
 class BlockGloballyIndexed(AbstractBlock):
     lf_name = None # override in concrete class
     room_offset_name = None # override in concrete class
+    #lookup_name = override in concrete class if necessary, via property method
 
     def __init__(self, *args, **kwds):
         super(BlockGloballyIndexed, self).__init__(*args, **kwds)
@@ -272,13 +274,17 @@ class BlockGloballyIndexed(AbstractBlock):
 
     def load_from_resource(self, resource, room_start=0):
         location = resource.tell()
-        super(BlockGloballyIndexed, self).load_from_resource(resource)
+        super(BlockGloballyIndexed, self).load_from_resource(resource, room_start)
         try:
             room_num = control.global_index_map.get_index(self.lf_name, room_start)
             room_offset = control.global_index_map.get_index(self.room_offset_name, room_num)
             self.index = control.global_index_map.get_index(self.lookup_name,
                                                              (room_num, location - room_offset))
         except util.ScummPackerUnrecognisedIndexException, suie:
+            room_num = control.global_index_map.get_index(self.lf_name, room_start)
+            logging.debug("Unknown block at room num: %s" % room_num)
+            room_offset = control.global_index_map.get_index(self.room_offset_name, room_num)
+            logging.debug("Unknown block at room offset: %s" % location - room_offset)
             logging.error(("Block \"%s\" at offset %s has no entry in the index file (.000). " + 
                           "It can not be re-packed or used in the game.") % (self.name, location))
             self.is_unknown = True
@@ -330,7 +336,7 @@ class BlockGloballyIndexed(AbstractBlock):
 class BlockLocalScript(AbstractBlock):
     name = None # override in concrete class
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         script_id = resource.read(1)
         if decrypt:
             script_id = util.crypt(script_id, self.crypt_value)
@@ -395,11 +401,12 @@ class BlockLucasartsFile(BlockContainer, BlockGloballyIndexed):
     """ Anything inheriting from this class should also inherit from the concrete versions
     of BlockContainer and BlockGloballyIndexed."""
     is_unknown = False
+    disk_lookup_name = NotImplementedError("This property must be overridden by inheriting classes.")
 
     def load_from_resource(self, resource, room_start=0):
         location = resource.tell()
         self._read_header(resource, True)
-        self._read_data(resource, location, True)
+        self._read_data(resource, location, True, location)
         try:
             self.index = control.global_index_map.get_index(self.name, location)
         except util.ScummPackerUnrecognisedIndexException, suie:
@@ -411,7 +418,13 @@ class BlockLucasartsFile(BlockContainer, BlockGloballyIndexed):
     def save_to_resource(self, resource, room_start=0):
         location = resource.tell()
         room_start = location
+        # Map the location of the LF block.
         control.global_index_map.map_index(self.name, location, self.index)
+        # Map the room number to the disk number, for later use in
+        # 0R/DROO blocks in the index file.
+        control.global_index_map.map_index(self.disk_lookup_name,
+                                           self.index,
+                                           control.disk_spanning_counter)
         super(BlockLucasartsFile, self).save_to_resource(resource, room_start)
 
     def save_to_file(self, path):
@@ -457,8 +470,9 @@ class BlockRoomOffsets(AbstractBlock):
     LFLF_NAME = NotImplementedError("This property must be overridden by inheriting classes.") # class name (string)
     ROOM_OFFSET_NAME = NotImplementedError("This property must be overridden by inheriting classes.") # class name (string)
     OFFSET_POINTS_TO_ROOM = NotImplementedError("This property must be overridden by inheriting classes.") # boolean
+    disk_lookup_name = NotImplementedError("This property must be overridden by inheriting classes.") # string
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         num_rooms = util.str2int(resource.read(1),
                                     crypt_val=(self.crypt_value if decrypt else None))
 
@@ -490,7 +504,15 @@ class BlockRoomOffsets(AbstractBlock):
         #  whereas the "write_dummy_block" just looks at the number passed in, which
         #  comes from the number of entries in the file system.
         if self.OFFSET_POINTS_TO_ROOM:
-            room_table = sorted(control.global_index_map.items(self.ROOM_OFFSET_NAME))
+            room_table = []
+            for room_item in \
+            sorted(control.global_index_map.items(self.ROOM_OFFSET_NAME)):
+                # Don't write rooms not on this disk
+                room_num = room_item[0]
+                room_disk = control.global_index_map.get_index(self.disk_lookup_name, room_num)
+                if room_disk == control.disk_spanning_counter:
+                    room_table.append(room_item)
+
             num_of_rooms = len(room_table)
             resource.write(util.int2str(num_of_rooms, 1, crypt_val=self.crypt_value))
             for room_num, room_offset in room_table:
@@ -498,7 +520,15 @@ class BlockRoomOffsets(AbstractBlock):
                 resource.write(util.int2str(room_num, 1, crypt_val=self.crypt_value))
                 resource.write(util.int2str(room_offset, 4, util.LE, self.crypt_value))
         else:
-            room_table = sorted(control.global_index_map.items(self.LFLF_NAME))
+            room_table = []
+            for lflf_item in \
+            sorted(control.global_index_map.items(self.LFLF_NAME)):
+                # Don't write rooms not on this disk
+                room_num = lflf_item[1]
+                room_disk = control.global_index_map.get_index(self.disk_lookup_name, room_num)
+                if room_disk == control.disk_spanning_counter:
+                    room_table.append(lflf_item)
+
             num_of_rooms = len(room_table)
             resource.write(util.int2str(num_of_rooms, 1, crypt_val=self.crypt_value))
             for lf_offset, room_num in room_table:
@@ -522,6 +552,7 @@ class BlockRoomOffsets(AbstractBlock):
         self.size = block_end - block_start
     
 class BlockRoom(BlockContainer): # also globally indexed
+
     def __init__(self, *args, **kwds):
         super(BlockRoom, self).__init__(*args, **kwds)
         self._init_class_data()
@@ -538,15 +569,22 @@ class BlockRoom(BlockContainer): # also globally indexed
         self.num_scripts_type = None
         self.script_container_class = ScriptBlockContainer
         self.object_container_class = ObjectBlockContainer
+        self.dodgy_offsets = {} # workaround for junk room data in MI1EGA/MI1VGA
         raise NotImplementedError("This method must be overriden by a concrete class.")
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         end = start + self.size
         object_container = self.object_container_class(self.block_name_length, self.crypt_value)
         script_container = self.script_container_class(self.block_name_length, self.crypt_value)
         while resource.tell() < end:
+            if control.global_args.game in self.dodgy_offsets:
+                doff_set = self.dodgy_offsets[control.global_args.game]
+                if resource.tell() - 6 in doff_set:
+                    logging.warning("Skipping known dodgy room data at offset %s" % resource.tell())
+                    resource.seek(end)
+                    break
             block = control.block_dispatcher.dispatch_next_block(resource)
-            block.load_from_resource(resource)
+            block.load_from_resource(resource, room_start)
             if block.name in self.script_types:
                 script_container.append(block)
             elif block.name == self.object_image_type:
@@ -576,7 +614,7 @@ class BlockIndexDirectory(AbstractBlock):
     DIR_TYPES = NotImplementedError("This property must be overridden by inheriting classes.")
     MIN_ENTRIES = NotImplementedError("This property must be overridden by inheriting classes.")
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         raise NotImplementedError("This method must be overridden by inheriting classes.")
 
     def save_to_file(self, path):
@@ -629,7 +667,7 @@ class BlockObjectIndexes(AbstractBlock):
     name = NotImplementedError("This property must be overridden by inheriting classes.")
     class_data_size = NotImplementedError("This property must be overridden by inheriting classes.")
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         num_items = util.str2int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
         self.objects = []
         # Read all owner+state values
@@ -707,7 +745,7 @@ class BlockRoomIndexes(AbstractBlock):
                                        self.DEFAULT_PADDING_LENGTHS[control.global_args.game])
         super(BlockRoomIndexes, self).__init__(*args, **kwds)
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         raise NotImplementedError("This method must be overridden by inheriting classes.")       
         
     def save_to_file(self, path):
@@ -725,7 +763,7 @@ class BlockRoomHeader(AbstractBlock):
         ("num_objects", 'i', 'num_objects')
     )
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         """
         width 16le
         height 16le
@@ -771,7 +809,7 @@ class BlockRoomNames(AbstractBlock):
     name_length = 9
     name = NotImplementedError("This property must be overridden by inheriting classes.")
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         end = start + self.size
         self.room_names = []
         while resource.tell() < end:
@@ -1062,26 +1100,3 @@ class ScriptBlockContainer(object):
         childstr = [str(self.encd_script), str(self.excd_script)]
         childstr.extend([str(c) for c in self.local_scripts])
         return "[Scripts, " + ", ".join(childstr) + "]"
-
-class ResourceFileContainer(object):
-    """ Handles splitting rooms/LECF blocks across mutliple disk/resource files."""
-    
-    map_name = "Disk"
-    
-    def __init__(self):
-        self.disks = []
-
-    def load_from_resource(self, resource, room_start=0):
-        pass
-    
-    def save_to_resource(self, resource, room_start=0):
-        pass
-    
-    def load_from_file(self, path):
-        pass
-    
-    def save_to_file(self, path):
-        pass
-    
-    
-

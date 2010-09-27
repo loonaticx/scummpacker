@@ -12,6 +12,7 @@ INDEXED_BLOCKS_V4 = (
     "CO", # cosutmes
     "SO", # sounds
     "RN", # room names
+    "Disk" # for disk spanning info. Could use "LE".
 )
 
 class BlockDispatcherV4(AbstractBlockDispatcher):

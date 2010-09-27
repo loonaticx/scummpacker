@@ -20,7 +20,7 @@ class BlockCDHDV5(BlockDefaultV5):
         ),
     )
 
-    def _read_data(self, resource, start, decrypt):
+    def _read_data(self, resource, start, decrypt, room_start=0):
         """
           obj id    : 16le
           x         : 8
