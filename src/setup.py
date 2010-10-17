@@ -1,27 +1,23 @@
-__author__="Not Applicable"
-__date__ ="$13/09/2010 9:32:57 PM$"
+# setup script for ScummPacker
 
-from setuptools import setup,find_packages
+from distutils.core import setup
+import py2exe
 
-setup (
-  name = 'ScummPacker',
-  version = '0.1',
-  packages = find_packages(),
+# includes for py2exe
+includes=[]
 
-  # Declare your packages' dependencies here, for eg:
-  install_requires=['foo>=3'],
+opts = { 'py2exe': { 'includes':includes } }
+#print 'opts',opts
 
-  # Fill in these to make your Egg ready for upload to
-  # PyPI
-  author = 'Not Applicable',
-  author_email = '',
-
-  summary = 'Just another Python package for the cheese shop',
-  url = '',
-  license = '',
-  long_description= 'Long description of the package',
-
-  # could also include long_description, download_url, classifiers, etc.
-
-  
-)
+setup(version = "2.0",
+      description = "Scummpacker v2",
+      name = "Scummpacker v2",
+      author = "Laurence Dougal Myers",
+      author_email = "jestarjokin@jestarjokin.net",
+      console = [
+        {
+            "script": "scummpacker.py",
+        }
+      ],
+      options=opts
+      )
