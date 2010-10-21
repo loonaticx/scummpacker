@@ -67,13 +67,20 @@ class AbstractIndexDispatcher(AbstractBlockDispatcher):
 
     def load_from_resource(self, resource, room_start=0):
         self.children = []
-        for _ in xrange(len(self.BLOCK_MAP)):
+        # Find out how big the index file is.
+        start = resource.tell()
+        resource.seek(0, os.SEEK_END)
+        end = resource.tell()
+        resource.seek(start, os.SEEK_SET)
+        #for _ in xrange(len(self.BLOCK_MAP)):
+        while resource.tell() < end:
             block = self.dispatch_next_block(resource)
             block.load_from_resource(resource)
             self.children.append(block)
 
     def save_to_file(self, path):
         for c in self.children:
+            logging.debug("Saving index %s to file: %s" % (c.name, path))
             c.save_to_file(path)
 
     def dispatch_and_load_from_file(self, path):

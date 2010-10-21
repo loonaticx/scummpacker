@@ -26,12 +26,7 @@ class BlockSOV4(BlockContainerV4, BlockGloballyIndexedV4):
 
     def save_to_resource(self, resource, room_start=0):
         location = resource.tell()
-
-        room_num = control.global_index_map.get_index(self.lf_name, room_start)
-        room_offset = control.global_index_map.get_index(self.room_offset_name, room_num)
-        control.global_index_map.map_index(self.name,
-                                           (room_num, location - room_offset),
-                                           self.index)
+        self._map_index(location, room_start)
         super(BlockSOV4, self).save_to_resource(resource, room_start)
 
     def load_from_file(self, path):

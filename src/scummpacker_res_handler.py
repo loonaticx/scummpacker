@@ -19,12 +19,46 @@ class ResourceHandler(object):
     
     SINGLE_ROOM_MULTI_FILE, MULTI_ROOM_MULTI_FILE, SINGLE_FILE = range(3)
     RESOURCE_FILE_TEMPLATES_PER_GAME = {
-        "MI1EGA" : (MULTI_ROOM_MULTI_FILE, ("000", "LFL"), ("DISK%NN%", "LEC")),
-        "MI1VGA" : (MULTI_ROOM_MULTI_FILE, ("000", "LFL"), ("DISK%NN%", "LEC")),
-        "LOOMCD" : (MULTI_ROOM_MULTI_FILE, ("000", "LFL"), ("DISK%NN%", "LEC")),
-        "MI1CD" : (SINGLE_FILE, ("MONKEY", "000"), ("MONKEY", "001")),
-        "MI2" : (SINGLE_FILE, ("MONKEY2", "000"), ("MONKEY2", "001")),
-        "FOA" : (SINGLE_FILE, ("ATLANTIS", "000"), ("ATLANTIS", "001"))
+        "ZAKFM" : (SINGLE_ROOM_MULTI_FILE,
+                  ("00", "LFL"),
+                  ("%NN%", "LFL"),
+                  frozenset(("98.LFL", "99.LFL"))
+                  ),
+        "INDY3VGA" : (SINGLE_ROOM_MULTI_FILE,
+                     ("00", "LFL"),
+                     ("%NN%", "LFL"),
+                     frozenset(("98.LFL", "99.LFL"))
+                     ),
+        "MI1EGA" : (MULTI_ROOM_MULTI_FILE,
+                    ("000", "LFL"),
+                    ("DISK%NN%", "LEC"),
+                    frozenset(tuple())
+                    ),
+        "MI1VGA" : (MULTI_ROOM_MULTI_FILE,
+                   ("000", "LFL"),
+                   ("DISK%NN%", "LEC"),
+                   frozenset(tuple())
+                   ),
+        "LOOMCD" : (MULTI_ROOM_MULTI_FILE,
+                   ("000", "LFL"),
+                   ("DISK%NN%", "LEC"),
+                   frozenset(tuple())
+                   ),
+        "MI1CD" : (SINGLE_FILE,
+                  ("MONKEY", "000"),
+                  ("MONKEY", "001"),
+                  frozenset(tuple())
+                  ),
+        "MI2" : (SINGLE_FILE,
+                ("MONKEY2", "000"),
+                ("MONKEY2", "001"),
+                frozenset(tuple())
+                ),
+        "FOA" : (SINGLE_FILE, 
+                ("ATLANTIS", "000"),
+                ("ATLANTIS", "001"),
+                frozenset(tuple())
+                )
     }
     
     def unpack(self):       
@@ -32,7 +66,7 @@ class ResourceHandler(object):
         assign_dispatchers(*dispatchers.DispatcherFactory(control.global_args.scumm_version))
         # Get resource names
         try:
-            spanning, (index_name, index_ext), (resource_name, resource_ext) = self.RESOURCE_FILE_TEMPLATES_PER_GAME[control.global_args.game]
+            spanning, (index_name, index_ext), (resource_name, resource_ext), ignored_res = self.RESOURCE_FILE_TEMPLATES_PER_GAME[control.global_args.game]
         except KeyError:
             raise util.ScummPackerException("No resource file template defined for game: %s" % control.global_args.game)
         # Load from resources
@@ -47,12 +81,23 @@ class ResourceHandler(object):
             index_block = control.index_dispatcher.dispatch_and_load_from_resource(index_file)
             
         # read resources, which could be split across multiple disk files.
-        while True:
-            # Look for DISK01.LEC, DISK02.LEC etc until no more found.
-            res_name = os.path.join(base_path, resource_name.replace("%NN%", str(resource_counter).zfill(2)) + "." + resource_ext)
+        while resource_counter < 100:
+            # Look for 01.LFL, 02.LFL or DISK01.LEC, DISK02.LEC etc until no more found.
+            rfn = resource_name.replace("%NN%", str(resource_counter).zfill(2)) + "." + resource_ext
+            print rfn
+            if rfn in ignored_res:
+                resource_counter += 1
+                continue
+            res_name = os.path.join(base_path, rfn)
+            # SCUMM v3 can have gaps in room numbering/file names.
             if not os.path.isfile(res_name):
-                break
+                if spanning == self.SINGLE_ROOM_MULTI_FILE:
+                    resource_counter += 1
+                    continue
+                else:
+                    break
             logging.normal("Reading from %s" % res_name)
+            control.disk_spanning_counter = resource_counter
             with file(res_name, 'rb') as res_file:
                 resources.append(control.block_dispatcher.dispatch_and_load_from_resource(res_file))
             resource_counter += 1
@@ -62,8 +107,13 @@ class ResourceHandler(object):
         base_path = control.global_args.output_file_name
         assert os.path.isdir(base_path)        
         for i, resource_block in enumerate(resources):
-            disk_path = os.path.join(base_path, resource_name.replace("%NN%", str(i + 1).zfill(2)))
-            logging.normal("Saving to %s" % disk_path)
+            # SCUMM V3 can have gaps in numbering, so LFL Container block
+            #  handles creation of the output resource folders.
+            if spanning == self.SINGLE_ROOM_MULTI_FILE:
+                disk_path = base_path
+            else:
+                disk_path = os.path.join(base_path, resource_name.replace("%NN%", str(i + 1).zfill(2)))
+            logging.normal("Saving resource %i to %s" % (i, disk_path))
             if not os.path.isdir(disk_path):
                 os.mkdir(disk_path)
             resource_block.save_to_file(disk_path)
@@ -74,7 +124,7 @@ class ResourceHandler(object):
         assign_dispatchers(*dispatchers.DispatcherFactory(control.global_args.scumm_version))
         # Get resource names
         try:
-            spanning, (index_name, index_ext), (resource_name, resource_ext) = self.RESOURCE_FILE_TEMPLATES_PER_GAME[control.global_args.game]
+            spanning, (index_name, index_ext), (resource_name, resource_ext), ignored_res = self.RESOURCE_FILE_TEMPLATES_PER_GAME[control.global_args.game]
         except KeyError:
             raise util.ScummPackerException("No resource file template defined for game: %s" % control.global_args.game)
         # Load from files
@@ -84,12 +134,18 @@ class ResourceHandler(object):
         resources = []
         resource_counter = 1
         # load folders, which represents disk spanning.
-        while True:
+        while resource_counter < 100:
             # Look for DISK01, DISK02 etc until no more found.
             res_name = os.path.join(base_path, resource_name.replace("%NN%", str(resource_counter).zfill(2)))
             if not os.path.isdir(res_name):
-                break
+                # SCUMM V3 names files by room number, which can have gaps.
+                if spanning == self.SINGLE_ROOM_MULTI_FILE:
+                    resource_counter += 1
+                    continue
+                else:
+                    break
             logging.normal("Reading from %s" % res_name)
+            control.disk_spanning_counter = resource_counter
             resources.append(control.file_dispatcher.dispatch_and_load_from_file(res_name))
             resource_counter += 1        
         index_block = control.index_dispatcher.dispatch_and_load_from_file(control.global_args.input_file_name)
@@ -99,7 +155,11 @@ class ResourceHandler(object):
         base_path = control.global_args.output_file_name
         assert os.path.isdir(base_path)
         for i, resource_block in enumerate(resources):
-            disk_file_name = os.path.join(base_path, resource_name.replace("%NN%", str(i + 1).zfill(2)) + "." + resource_ext)
+            if spanning == self.SINGLE_ROOM_MULTI_FILE:
+                res_num = int(resource_block.name)
+            else:
+                res_num = i + 1
+            disk_file_name = os.path.join(base_path, (resource_name + "." + resource_ext).replace("%NN%", str(res_num).zfill(2)))
             logging.normal("Saving to %s" % disk_file_name)
             control.disk_spanning_counter = i + 1
             with file(disk_file_name, 'wb') as disk_file:

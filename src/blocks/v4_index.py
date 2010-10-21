@@ -18,6 +18,8 @@ class Block0RV4(BlockRoomIndexes, BlockDefaultV4):
     name = "0R"
     disk_lookup_name = "Disk"
     DEFAULT_PADDING_LENGTHS = {
+        "ZAKFM" : 99, # SCUMM 2??
+        "INDY3VGA" : 99, # actually SCUMM 3
         "LOOMCD" : 99,
         "MI1VGA" : 99,
         "MI1EGA" : 99,
@@ -46,7 +48,6 @@ class Block0RV4(BlockRoomIndexes, BlockDefaultV4):
         self._write_header(resource, True)
         resource.write(util.int2str(self.padding_length, 2, crypt_val=self.crypt_value))
         for room_num in xrange(self.padding_length): # this is "file/disk number" in V4, rather than "room number"
-            #if
             try:
                 disk_number = control.global_index_map.get_index(self.disk_lookup_name, room_num)
             except util.ScummPackerUnrecognisedIndexException:

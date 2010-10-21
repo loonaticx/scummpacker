@@ -128,6 +128,7 @@ class IndexBlockContainerV4(AbstractIndexDispatcher):
     }
     REGEX_BLOCKS = []
     DEFAULT_BLOCK = blocks.BlockDefaultV4
+    USE_ROOMNAMES = False # SCUMM V3 doesn't use room names.
     
     def _read_block_name(self, resource):
         """ SCUMM v3 and v4 stores block size before the block name."""
@@ -142,9 +143,10 @@ class IndexBlockContainerV4(AbstractIndexDispatcher):
 
         # Crappy crappy crap
         # It's like this because blocks need to be in a specific order
-        rnam_block = blocks.BlockRNV4(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
-        rnam_block.load_from_file(os.path.join(path, "roomnames.xml"))
-        self.children.append(rnam_block)
+        if self.USE_ROOMNAMES:
+            rnam_block = blocks.BlockRNV4(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
+            rnam_block.load_from_file(os.path.join(path, "roomnames.xml"))
+            self.children.append(rnam_block)
 
         d_block = blocks.Block0RV4(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
         self.children.append(d_block)

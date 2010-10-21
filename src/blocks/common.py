@@ -185,7 +185,7 @@ class BlockContainer(AbstractBlock):
         curr_type = None
         ol_node = None
         for c in self.children:
-            if not hasattr(c, "index"):
+            if not hasattr(c, "index") or c.index is None:
                 continue
             block_type = self._find_block_rank_lookup_name(c)
             # if block type is new, create new list
@@ -276,19 +276,25 @@ class BlockGloballyIndexed(AbstractBlock):
         location = resource.tell()
         super(BlockGloballyIndexed, self).load_from_resource(resource, room_start)
         try:
-            room_num = control.global_index_map.get_index(self.lf_name, room_start)
-            room_offset = control.global_index_map.get_index(self.room_offset_name, room_num)
-            self.index = control.global_index_map.get_index(self.lookup_name,
-                                                             (room_num, location - room_offset))
+            self._lookup_index(location, room_start)
         except util.ScummPackerUnrecognisedIndexException, suie:
-            room_num = control.global_index_map.get_index(self.lf_name, room_start)
-            logging.debug("Unknown block at room num: %s" % room_num)
-            room_offset = control.global_index_map.get_index(self.room_offset_name, room_num)
-            logging.debug("Unknown block at room offset: %s" % location - room_offset)
-            logging.error(("Block \"%s\" at offset %s has no entry in the index file (.000). " + 
-                          "It can not be re-packed or used in the game.") % (self.name, location))
-            self.is_unknown = True
-            self.index = control.unknown_blocks_counter.get_next_index(self.lookup_name)
+            self._handle_unknown_index(location, room_start)
+
+    def _lookup_index(self, location, room_start):
+        room_num = control.global_index_map.get_index(self.lf_name, (control.disk_spanning_counter, room_start))
+        room_offset = control.global_index_map.get_index(self.room_offset_name, room_num)
+        self.index = control.global_index_map.get_index(self.lookup_name,
+                                                         (room_num, location - room_offset))
+
+    def _handle_unknown_index(self, location, room_start):
+        room_num = control.global_index_map.get_index(self.lf_name, (control.disk_spanning_counter, room_start))
+        logging.debug("Unknown block at room num: %s" % room_num)
+        room_offset = control.global_index_map.get_index(self.room_offset_name, room_num)
+        logging.debug("Unknown block at room offset: %s" % str(location - room_offset))
+        logging.error(("Block \"%s\" at offset %s has no entry in the index file (.000). " +
+                      "It can not be re-packed or used in the game.") % (self.name, location))
+        self.is_unknown = True
+        self.index = control.unknown_blocks_counter.get_next_index(self.lookup_name)
 
     def save_to_resource(self, resource, room_start=0):
         # Look up the start of the current ROOM block, store
@@ -296,12 +302,15 @@ class BlockGloballyIndexed(AbstractBlock):
         # Later on, our directories will just treat global_index_map as a list of
         # tables and go through all of the values.
         location = resource.tell()
-        room_num = control.global_index_map.get_index(self.lf_name, room_start)
+        self._map_index(location, room_start)
+        super(BlockGloballyIndexed, self).save_to_resource(resource, room_start)
+
+    def _map_index(self, location, room_start):
+        room_num = control.global_index_map.get_index(self.lf_name, (control.disk_spanning_counter, room_start))
         room_offset = control.global_index_map.get_index(self.room_offset_name, room_num)
         control.global_index_map.map_index(self.lookup_name,
                                            (room_num, location - room_offset),
                                            self.index)
-        super(BlockGloballyIndexed, self).save_to_resource(resource, room_start)
 
     def load_from_file(self, path):
         """ Assumes we won't get any 'unknown' blocks, based on the regex in the file walker."""
@@ -487,7 +496,7 @@ class BlockRoomOffsets(AbstractBlock):
                 lf_offset = util.str2int(resource.read(4),
                                             crypt_val=(self.crypt_value if decrypt else None))
                 room_offset = lf_offset + 2 + self.block_name_length + 4 # add 2 bytes for the room number/index of LF block. 
-            control.global_index_map.map_index(self.LFLF_NAME, lf_offset, room_no)
+            control.global_index_map.map_index(self.LFLF_NAME, (control.disk_spanning_counter, lf_offset), room_no)
             control.global_index_map.map_index(self.ROOM_OFFSET_NAME, room_no, room_offset) # HACK
 
     def save_to_file(self, path):
@@ -579,7 +588,7 @@ class BlockRoom(BlockContainer): # also globally indexed
         while resource.tell() < end:
             if control.global_args.game in self.dodgy_offsets:
                 doff_set = self.dodgy_offsets[control.global_args.game]
-                if resource.tell() - 6 in doff_set:
+                if resource.tell() - 4 - self.block_name_length in doff_set:
                     logging.warning("Skipping known dodgy room data at offset %s" % resource.tell())
                     resource.seek(end)
                     break
@@ -603,7 +612,7 @@ class BlockRoom(BlockContainer): # also globally indexed
 
     def save_to_resource(self, resource, room_start=0):
         location = resource.tell()
-        room_num = control.global_index_map.get_index(self.lf_name, room_start)
+        room_num = control.global_index_map.get_index(self.lf_name, (control.disk_spanning_counter, room_start))
         logging.debug("Saving room: %s" % room_num)
         control.global_index_map.map_index(self.room_offset_name, room_num, location)
         super(BlockRoom, self).save_to_resource(resource, room_start)
@@ -730,7 +739,7 @@ class BlockObjectIndexes(AbstractBlock):
 class BlockRoomIndexes(AbstractBlock):
     """Directory of offsets to ROOM blocks. Also maps disk spanning.
     
-    Don't really seem to be used much for V5 and LOOM CD. Is used in Monkey Island EGA/VGA.
+    Don't really seem to be used much for V5 and LOOM CD. It is used in Monkey Island EGA/VGA.
 
     Each game seems to have a different padding length."""
     name = NotImplementedError("This property must be overridden by inheriting classes.")
@@ -1063,7 +1072,7 @@ class ScriptBlockContainer(object):
     def save_to_resource(self, resource, room_start=0):
         # Write entry and exit scripts (seperate from local scripts)
         if not self.encd_script or not self.excd_script:
-            room_num = control.global_index_map.get_index(self.lf_name, room_start)
+            room_num = control.global_index_map.get_index(self.lf_name, (control.disk_spanning_counter, room_start))
             raise util.ScummPackerException(
                 "Room #" + str(room_num) + " appears to be missing either a room entry or exit script (or both).")
         self.excd_script.save_to_resource(resource, room_start)

@@ -46,7 +46,7 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
 
     def save_to_resource(self, resource, room_start=0):
         location = resource.tell()
-        room_num = control.global_index_map.get_index(self.lf_name, room_start)
+        room_num = control.global_index_map.get_index(self.lf_name, (control.disk_spanning_counter, room_start))
         room_offset = control.global_index_map.get_index(self.room_offset_name, room_num)
         control.global_index_map.map_index(self.name,
                                            (room_num, location - room_offset),

@@ -71,6 +71,8 @@ class IndexMappingContainer(object):
     
 class GlobalArguments(object):
     SCUMM_VERSION_GAME_MAP = {
+        "ZAKFM" : "3fm",
+        "INDY3VGA" : "3",
         "MI1EGA" : "4",
         "MI1VGA" : "4",
         "LOOMCD" : "4",
@@ -79,10 +81,11 @@ class GlobalArguments(object):
         "FOA" : "5"
     }
     DEFAULT_GAME_FOR_SCUMM_VERSION = {
+        "3fm" : "ZAKFM",
+        "3" : "INDY3VGA",
         "4" : "LOOMCD", # hm...
-        "5" : "MI2"
+        "5" : "FOA"
     }
-    DEFAULT_GAME_FOR_UNKNOWN_SCUMM_VERSION = "MI2"
 
     def __init__(self):
         self._scumm_version = None
@@ -172,13 +175,13 @@ class GlobalArguments(object):
         if not self.pack and not self.unpack:
             return "Please specify whether to pack or unpack SCUMM resources."
         # Validate input and output paths
-        if not os.path.isdir(self.input_file_name):
-            return "Path does not exist, or is not a directory: %s" % self.input_file_name
-        if not os.path.isdir(self.output_file_name):
+        if self.input_file_name is None or not os.path.isdir(self.input_file_name):
+            return "Input path does not exist, or is not a directory: %s" % self.input_file_name
+        if self.output_file_name is None or not os.path.isdir(self.output_file_name):
             try:
                 os.mkdir(self.output_file_name)
             except OSError:
-                return "Could not create output directory: " + str(self.output_file_name)
+                return "Output path could not be created, or is not a directory: " + str(self.output_file_name)
         return None
 
     def parse_args(self):

@@ -101,9 +101,21 @@ class BlockIndexDirectoryV4(BlockIndexDirectory, BlockDefaultV4):
         "0S" : "SC",
         "0N" : "SO",
         "0C" : "CO",
-        #"0O" : "OB" # handled seperately
+        #"0O" : "OB" # handled separately
     }
     MIN_ENTRIES = {
+        # SCUMM V3. Shouldn't be here.
+        "ZAKFM" : {
+            "0S" : 199,
+            "0N" : 199,
+            "0C" : 199
+        },
+        "INDY3VGA" : {
+            "0S" : 139, # Odd that INDY3VGA has lower values than other V3 games.
+            "0N" : 84,
+            "0C" : 129
+        },
+        # SCUMM V4
         "LOOMCD" : {
             "0S" : 199,
             "0N" : 199,
