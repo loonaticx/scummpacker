@@ -218,6 +218,14 @@ class BlockIndexDirectoryV5(BlockIndexDirectory, BlockDefaultV5):
             "DSOU" : 250,
             "DCOS" : 244,
             "DCHR" : 6
+        },
+        # V6 stuff
+        "DOTT" : {
+            # TODO: replace these dummy values with the correct values
+            "DSCR" : 200,
+            "DSOU" : 250,
+            "DCOS" : 244,
+            "DCHR" : 6
         }
     }
 

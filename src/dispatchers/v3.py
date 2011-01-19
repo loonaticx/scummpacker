@@ -5,7 +5,7 @@
 #import re
 import blocks
 from common import *
-from v3 import *
+#from v3 import *
 from v4 import *
 
 INDEXED_BLOCKS_V3 = INDEXED_BLOCKS_V4

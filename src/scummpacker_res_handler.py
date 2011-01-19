@@ -5,6 +5,8 @@ import scummpacker_util as util
 import scummpacker_control as control
 import dispatchers
 
+dummy_set = frozenset(tuple())
+
 def assign_dispatchers(index_dispatcher, block_dispatcher, file_dispatcher, indexed_blocks):
     """ This is pretty grotty."""
     control.index_dispatcher = index_dispatcher
@@ -32,33 +34,39 @@ class ResourceHandler(object):
         "MI1EGA" : (MULTI_ROOM_MULTI_FILE,
                     ("000", "LFL"),
                     ("DISK%NN%", "LEC"),
-                    frozenset(tuple())
+                    dummy_set
                     ),
         "MI1VGA" : (MULTI_ROOM_MULTI_FILE,
                    ("000", "LFL"),
                    ("DISK%NN%", "LEC"),
-                   frozenset(tuple())
+                   dummy_set
                    ),
         "LOOMCD" : (MULTI_ROOM_MULTI_FILE,
                    ("000", "LFL"),
                    ("DISK%NN%", "LEC"),
-                   frozenset(tuple())
+                   dummy_set
                    ),
         "MI1CD" : (SINGLE_FILE,
                   ("MONKEY", "000"),
                   ("MONKEY", "001"),
-                  frozenset(tuple())
+                  dummy_set
                   ),
         "MI2" : (SINGLE_FILE,
                 ("MONKEY2", "000"),
                 ("MONKEY2", "001"),
-                frozenset(tuple())
+                dummy_set
                 ),
         "FOA" : (SINGLE_FILE, 
                 ("ATLANTIS", "000"),
                 ("ATLANTIS", "001"),
-                frozenset(tuple())
-                )
+                dummy_set
+                ),
+        "DOTT" : (SINGLE_FILE,
+                 ("TENTACLE", "000"),
+                 ("TENTACLE", "001"),
+                 dummy_set
+                 ),
+
     }
     
     def unpack(self):       
