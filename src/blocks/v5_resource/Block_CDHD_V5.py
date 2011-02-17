@@ -19,6 +19,21 @@ class BlockCDHDV5(BlockDefaultV5):
             )
         ),
     )
+    struct_data = {
+        'size' : 13,
+        'format' : "<H6B2hB",
+        'attributes' :
+            ('obj_id',
+            'x',
+            'y',
+            'width',
+            'height',
+            'flags',
+            'parent',
+            'walk_x',
+            'walk_y',
+            'actor_dir')
+    }
 
     def _read_data(self, resource, start, decrypt, room_start=0):
         """
@@ -34,16 +49,7 @@ class BlockCDHDV5(BlockDefaultV5):
           actor dir : 8 (direction the actor will look at when standing in front
                          of the object)
         """
-        data = resource.read(13)
-        if decrypt:
-            data = util.crypt(data, self.crypt_value)
-        values = struct.unpack("<H6B2hB", data)
-        del data
-
-        # Unpack the values
-        self.obj_id, self.x, self.y, self.width, self.height, self.flags, \
-            self.parent, self.walk_x, self.walk_y, self.actor_dir = values
-        del values
+        self.read_struct_data(resource, decrypt)
 
     def load_from_file(self, path):
         self.name = "CDHD"
@@ -60,11 +66,7 @@ class BlockCDHDV5(BlockDefaultV5):
 
         self.read_xml_node(root)
 
-    def _write_data(self, outfile, encrypt):
+    def _write_data(self, resource, encrypt):
         """ Assumes it's writing to a resource."""
-        data = struct.pack("<H6B2hB", self.obj_id, self.x, self.y, self.width, self.height, self.flags,
-            self.parent, self.walk_x, self.walk_y, self.actor_dir)
-        if encrypt:
-            data = util.crypt(data, self.crypt_value)
-        outfile.write(data)
+        self.write_struct_data(resource, encrypt)
 

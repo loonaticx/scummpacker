@@ -1,4 +1,3 @@
-import struct
 import xml.etree.ElementTree as et
 import scummpacker_util as util
 from blocks.v5_base import BlockDefaultV5
@@ -18,6 +17,20 @@ class BlockIMHDV5(BlockDefaultV5):
             )
         ),
     )
+    struct_data = {
+        'size' : 16,
+        'format' : "<3H2B4H",
+        'attributes' :
+            ('obj_id',
+            'num_imnn',
+            'num_zpnn',
+            'flags',
+            'unknown',
+            'x',
+            'y',
+            'width',
+            'height')
+    }
 
     def _read_data(self, resource, start, decrypt, room_start=0):
         """
@@ -38,17 +51,7 @@ class BlockIMHDV5(BlockDefaultV5):
           x          : 16le signed
           y          : 16le signed
         """
-
-        data = resource.read(16)
-        if decrypt:
-            data = util.crypt(data, self.crypt_value)
-        values = struct.unpack("<3H2B4H", data)
-        del data
-
-        # Unpack the values
-        self.obj_id, self.num_imnn, self.num_zpnn, self.flags, self.unknown, \
-            self.x, self.y, self.width, self.height = values
-        del values
+        self.read_struct_data(resource, decrypt)
 
     def load_from_file(self, path):
         self.name = "IMHD"
@@ -68,9 +71,5 @@ class BlockIMHDV5(BlockDefaultV5):
         """ Combined OBHD.xml is saved in the ObjectBlockContainer."""
         return
 
-    def _write_data(self, outfile, encrypt):
-        data = struct.pack("<3H2B4H", self.obj_id, self.num_imnn, self.num_zpnn, self.flags, self.unknown,
-            self.x, self.y, self.width, self.height)
-        if encrypt:
-            data = util.crypt(data, self.crypt_value)
-        outfile.write(data)
+    def _write_data(self, resource, encrypt):
+        self.write_struct_data(resource, encrypt)

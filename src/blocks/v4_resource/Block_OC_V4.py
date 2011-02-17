@@ -23,6 +23,21 @@ class BlockOCV4(BlockDefaultV4):
             )
         ),
     )
+    struct_data = {
+        'size' : 13,
+        'format' : "<H5B2h2B",
+        'attributes' :
+            ('obj_id',
+            'unknown',
+            'x',
+            'y_and_parent_state',
+            'width',
+            'parent',
+            'walk_x',
+            'walk_y',
+            'height_and_actor_dir',
+            'name_offset')
+    }
 
     def _read_data(self, resource, start, decrypt, room_start=0):
         """
@@ -39,24 +54,15 @@ class BlockOCV4(BlockDefaultV4):
           verb table : variable
           obj_name  : variable, null-terminated
         """
-        data = resource.read(13)
-        if decrypt:
-            data = util.crypt(data, self.crypt_value)
-        values = struct.unpack("<H5B2h2B", data)
-        del data
+        self.read_struct_data(resource, decrypt)
 
-        # Unpack the values
-        self.obj_id, self.unknown, self.x, y_and_parent_state, self.width, \
-        self.parent, self.walk_x, self.walk_y, height_and_actor_dir, name_offset = values
-        del values
-
-        self.parent_state = y_and_parent_state & 0x80
-        self.y = y_and_parent_state & 0x7F
-        self.height = height_and_actor_dir & 0xF8
-        self.actor_dir = height_and_actor_dir & 0x07
+        self.parent_state = self.y_and_parent_state & 0x80
+        self.y = self.y_and_parent_state & 0x7F
+        self.height = self.height_and_actor_dir & 0xF8
+        self.actor_dir = self.height_and_actor_dir & 0x07
 
         # Read the event table
-        event_table_size = (start + name_offset) - resource.tell()
+        event_table_size = (start + self.name_offset) - resource.tell()
         #logging.debug("event table size: %s, thing1: %s, resource tell: %s" % (event_table_size, (start + name_offset), resource.tell()))
         data = self._read_raw_data(resource, event_table_size, decrypt)
         self.event_table = data
@@ -76,6 +82,11 @@ class BlockOCV4(BlockDefaultV4):
         #logging.debug("self size: %s, thing1: %s, thing2: %s, resource tell: %s" % (self.size, (resource.tell() - start), self.size - (resource.tell() - start), resource.tell()))
         data = self._read_raw_data(resource, self.size - (resource.tell() - start), decrypt)
         self.script_data = data
+
+        # remove junk data from struct reading process
+        del self.y_and_parent_state
+        del self.height_and_actor_dir
+        del self.name_offset
 
     def load_from_file(self, path):
         self._load_header_from_xml(os.path.join(path, "OBHD.xml"))
@@ -121,22 +132,18 @@ class BlockOCV4(BlockDefaultV4):
     def _write_data(self, outfile, encrypt):
         """ Assumes it's writing to a resource."""
         # TODO: validate values fit into clamped?
-        y_and_parent_state = (self.parent_state & 0x80) | (self.y & 0x7F)
-        height_and_actor_dir = (self.height & 0xF8) | (self.actor_dir & 0x07)
+        self.y_and_parent_state = (self.parent_state & 0x80) | (self.y & 0x7F)
+        self.height_and_actor_dir = (self.height & 0xF8) | (self.actor_dir & 0x07)
 
         if len(self.event_table) == 0:
             self.event_table.append(0x00)
-        name_offset = 6 + 13 + len(self.event_table)
-        #assert len(self.event_table) > 0
-        #logging.debug(self.event_table)
-        #logging.debug("name offset: %s" % name_offset)
+        self.name_offset = 6 + 13 + len(self.event_table)
 
         # Object header
-        data = struct.pack("<H5B2h2B", self.obj_id, self.unknown, self.x, y_and_parent_state, self.width,
-            self.parent, self.walk_x, self.walk_y, height_and_actor_dir, name_offset)
-        if encrypt:
-            data = util.crypt(data, self.crypt_value)
-        outfile.write(data)
+        self.write_struct_data(outfile, encrypt)
+        del self.y_and_parent_state # cleanup
+        del self.height_and_actor_dir
+        del self.name_offset
 
         # Event table
         self._write_raw_data(outfile, self.event_table, encrypt)

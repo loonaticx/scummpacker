@@ -11,6 +11,7 @@ import scummpacker_util as util
 
 class AbstractBlock(object):
     xml_structure = tuple() # placeholder
+    struct_data = dict() # placeholder. Must have attributes "size", "format", and "attributes".
     
     def __init__(self, block_name_length, crypt_value, *args, **kwds):
         super(AbstractBlock, self).__init__(*args, **kwds)
@@ -103,8 +104,44 @@ class AbstractBlock(object):
 
         Not used by every block. To use it, the "xml_structure" property
         should be populated, and this method must be specifically called,
-        either from a containing block, or from the "save_to_resource" method."""
+        either from a containing block, or from the "load_from_file" method."""
         util.xml_helper.read(self, parent_node, self.xml_structure)
+
+    def write_struct_data(self, resource, encrypt):
+        """ Saves struct-packed data to the given resource.
+
+        Not used by every block. To use it, the "struct_data" property
+        should be populated, and this method must be specifically called,
+        either from a containing block, or from the "save_to_resource" method."""
+        s_size = self.struct_data['size']
+        s_format = self.struct_data['format']
+        s_attributes = self.struct_data['attributes']
+
+        data = struct.pack(s_format, *[getattr(self, a) for a in s_attributes])
+        if encrypt:
+            data = util.crypt(data, self.crypt_value)
+        assert len(data) == s_size
+        resource.write(data)
+
+    def read_struct_data(self, resource, decrypt):
+        """ Reads data from the given resource.
+
+        Not used by every block. To use it, the "xml_structure" property
+        should be populated, and this method must be specifically called,
+        either from a containing block, or from the "load_from_resource" method."""
+        s_size = self.struct_data['size']
+        s_format = self.struct_data['format']
+        s_attributes = self.struct_data['attributes']
+
+        data = resource.read(s_size)
+        if decrypt:
+            data = util.crypt(data, self.crypt_value)
+        values = struct.unpack(s_format, data)
+        del data
+
+        for a, v in zip(s_attributes, values):
+            setattr(self, a, v)
+
 
 class BlockContainer(AbstractBlock):
     block_ordering = [
