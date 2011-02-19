@@ -77,7 +77,7 @@ class BlockMAXSV5(BlockDefaultV5):
             data = util.crypt(data, self.crypt_value)
         outfile.write(data)
 
-class BlockDOBJV5(BlockDefaultV5):
+class BlockDOBJV5(BlockObjectIndexes, BlockDefaultV5):
     name = "DOBJ"
     class_data_size = 4
 

@@ -86,3 +86,61 @@ class BlockMAXSV6(BlockDefaultV5):
     def _write_data(self, resource, encrypt):
         """ Assumes it's writing to a resource."""
         self.write_struct_data(resource, encrypt)
+
+
+class BlockAARYV6(BlockDefaultV5):
+    name = "AARY"
+    
+    def _read_data(self, resource, start, decrypt, room_start=0):
+
+        self.arrays = []
+
+        array_num = util.str2int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
+        while array_num != 0:
+
+            a = util.str2int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
+            b = util.str2int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
+            c = util.str2int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
+
+            self.arrays.append( (array_num, a, b, c) )
+
+            array_num = util.str2int(resource.read(2), crypt_val=(self.crypt_value if decrypt else None))
+
+    def save_to_file(self, path):
+        root = et.Element("arrays")
+
+        for num, a, b, c in self.arrays:
+            array_node = et.SubElement(root, "array-entry")
+            et.SubElement(array_node, "num").text = util.int2xml(num)
+            et.SubElement(array_node, "a").text = util.int2xml(num)
+            et.SubElement(array_node, "b").text = util.int2xml(num)
+            et.SubElement(array_node, "c").text = util.int2xml(num)
+
+        util.indent_elementtree(root)
+        et.ElementTree(root).write(os.path.join(path, "aary.xml"))
+
+    def load_from_file(self, path):
+        tree = et.parse(path)
+        #root = tree.getroot()
+
+        self.arrays = []
+        for array_node in tree.getiterator("array-entry"):
+            num = util.xml2int(array_node.find("num").text)
+            a = util.xml2int(array_node.find("a").text)
+            b = util.xml2int(array_node.find("b").text)
+            c = util.xml2int(array_node.find("c").text)
+            self.arrays.append( (num, a, b, c) )
+
+        # each array definition is 8 bytes, plus 1 byte to mark the end of
+        #  the AARY block.
+        self.size = len(self.arrays) * 8 + 1 + self.block_name_length + 4
+
+    def save_to_resource(self, resource, room_start=0):
+        self._write_header(resource, True)
+        for num, a, b, c in self.arrays:
+            resource.write(util.int2str(num, 2, crypt_val=self.crypt_value))
+            resource.write(util.int2str(a, 2, crypt_val=self.crypt_value))
+            resource.write(util.int2str(b, 2, crypt_val=self.crypt_value))
+            resource.write(util.int2str(c, 2, crypt_val=self.crypt_value))
+        # Write the terminating value.
+        resource.write(util.int2str(0, 2, crypt_val=self.crypt_value))
