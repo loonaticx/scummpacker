@@ -90,12 +90,14 @@ class BlockDROOV5(BlockRoomIndexes, BlockDefaultV5):
     DEFAULT_PADDING_LENGTHS = {
         "MI1CD" : 100,
         "MI2" : 127,
-        "FOA" : 99
+        "FOA" : 99,
+        # Ooooh some more stuff for V6! Hackorama!
+        "DOTT" : 91,
     }
     
     def _read_data(self, resource, start, decrypt, room_start=0):
         """We just don't care."""
-        pass    
+        resource.seek(self.size - 8, os.SEEK_CUR)
     
     def save_to_resource(self, resource, room_start=0):
         """DROO blocks do not seem to be used in V5 games, so save dummy info."""

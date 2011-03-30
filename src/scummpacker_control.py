@@ -78,13 +78,15 @@ class GlobalArguments(object):
         "LOOMCD" : "4",
         "MI1CD" : "5",
         "MI2" : "5",
-        "FOA" : "5"
+        "FOA" : "5",
+        "DOTT" : "6"
     }
     DEFAULT_GAME_FOR_SCUMM_VERSION = {
         "3fm" : "ZAKFM",
         "3" : "INDY3VGA",
         "4" : "LOOMCD", # hm...
-        "5" : "FOA"
+        "5" : "FOA",
+        "6" : "DOTT" # Change this to SAM
     }
 
     def __init__(self):

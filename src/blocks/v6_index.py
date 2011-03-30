@@ -74,7 +74,7 @@ class BlockMAXSV6(BlockDefaultV5):
         et.ElementTree(root).write(os.path.join(path, "maxs.xml"))
 
     def load_from_file(self, path):
-        self.size = 30 + self.block_name_length + 4
+        self.size = self.struct_data['size'] + self.block_name_length + 4
         self._load_header_from_xml(path)
 
     def _load_header_from_xml(self, path):

@@ -9,6 +9,7 @@ class AbstractBlockDispatcher(object):
     DEFAULT_BLOCK = None
     REGEX_BLOCKS = []
     ROOT_BLOCK = None
+    debug = False
 
     def dispatch_and_load_from_resource(self, resource, room_start=0):
         root_block = self.ROOT_BLOCK(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
@@ -26,6 +27,8 @@ class AbstractBlockDispatcher(object):
             block_type = self._dispatch_regex_block(block_name)
             if block_type is None:
                 block_type = self.DEFAULT_BLOCK
+        if self.debug:
+            logging.debug("Dispatching new block: %s, loc: %s, using block type: %s" % (block_name, resource.tell(), block_type))
         block = block_type(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE) # instantiate the block object
         return block
 

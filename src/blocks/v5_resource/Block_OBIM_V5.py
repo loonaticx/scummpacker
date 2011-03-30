@@ -5,12 +5,14 @@ from Block_IMHD_V5 import BlockIMHDV5
 
 class BlockOBIMV5(BlockContainerV5):
     name = "OBIM"
+    imhd_class = BlockIMHDV5
+    container_class = BlockContainerV5
 
     def _read_data(self, resource, start, decrypt, room_start=0):
         end = start + self.size
 
         # Load the header
-        block = BlockIMHDV5(self.block_name_length, self.crypt_value)
+        block = self.imhd_class(self.block_name_length, self.crypt_value)
         block.load_from_resource(resource)
         self.obj_id = block.obj_id # maybe should handle header info better
         self.imhd = block
@@ -18,14 +20,14 @@ class BlockOBIMV5(BlockContainerV5):
         # Load the image data
         i = block.num_imnn
         while i > 0:
-            block = BlockContainerV5(self.block_name_length, self.crypt_value)
+            block = self.container_class(self.block_name_length, self.crypt_value)
             block.load_from_resource(resource)
             self.append(block)
             i -= 1
 
     def load_from_file(self, path):
         # Load the header
-        block = BlockIMHDV5(self.block_name_length, self.crypt_value)
+        block = self.imhd_class(self.block_name_length, self.crypt_value)
         block.load_from_file(os.path.join(path, "OBHD.xml"))
         self.append(block)
         self.obj_id = block.obj_id
@@ -45,7 +47,7 @@ class BlockOBIMV5(BlockContainerV5):
 
         for d in imnn_dirs:
             new_path = os.path.join(path, d)
-            block = BlockContainerV5(self.block_name_length, self.crypt_value)
+            block = self.container_class(self.block_name_length, self.crypt_value)
             block.load_from_file(new_path)
             self.append(block)
 

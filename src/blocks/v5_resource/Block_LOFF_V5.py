@@ -4,6 +4,6 @@ from blocks.v5_base import BlockDefaultV5
 class BlockLOFFV5(BlockRoomOffsets, BlockDefaultV5):
     name = "LOFF"
     LFLF_NAME = "LFLF"
-    ROOM_NAME = "ROOM"
+    ROOM_OFFSET_NAME = "ROOM"
     OFFSET_POINTS_TO_ROOM = True
     disk_lookup_name = "Disk"

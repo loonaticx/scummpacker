@@ -171,7 +171,12 @@ class BlockContainer(AbstractBlock):
 
     def _find_block_rank(self, block):
         rank_lookup_name = self._find_block_rank_lookup_name(block)
-        block_rank = self.block_ordering.index(rank_lookup_name) # requires all block types are listed
+        try:
+            block_rank = self.block_ordering.index(rank_lookup_name) # requires all block types are listed
+        except ValueError:
+            logging.error("Oops! The container block '%s' doesn't know how to order blocks of type '%s'! Get me a developer, STAT!" %
+                        (self.name, rank_lookup_name))
+            raise util.ScummPackerException("Unknown block wanted to be ranked/ordered: %s" % rank_lookup_name)
         return block_rank
 
     def append(self, block):
