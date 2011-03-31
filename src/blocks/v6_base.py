@@ -1,7 +1,10 @@
 from common import BlockContainer
-from v5_base import BlockDefaultV5
+from shared import BlockDefaultSharedV5V6
 
-class BlockContainerV6(BlockContainer, BlockDefaultV5):
+class BlockDefaultV6(BlockDefaultSharedV5V6):
+    pass
+
+class BlockContainerV6(BlockContainer, BlockDefaultV6):
     block_ordering = [
         #"LECF", # don't... just don't.
         "LOFF",

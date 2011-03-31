@@ -1,6 +1,7 @@
 from blocks.common import BlockRoom
 from blocks.v6_base import BlockContainerV6
-from blocks.v5_resource.other import ScriptBlockContainerV5, ObjectBlockContainerV5
+from blocks.v5_resource.other import ScriptBlockContainerV5
+from blocks.v6_resource.other import ObjectBlockContainerV6
 
 class BlockROOMV6(BlockRoom, BlockContainerV6): # also globally indexed
     def _init_class_data(self):
@@ -17,5 +18,5 @@ class BlockROOMV6(BlockRoom, BlockContainerV6): # also globally indexed
         self.object_code_type = "OBCD"
         self.num_scripts_type = "NLSC"
         self.script_container_class = ScriptBlockContainerV5
-        self.object_container_class = ObjectBlockContainerV5
+        self.object_container_class = ObjectBlockContainerV6
         self.dodgy_offsets = {}

@@ -122,24 +122,32 @@ def ordered_sort(in_list, order):
     return [ v for _, _, v in deco ]
 
 class XMLHelper(object):
+    READ = 'r'
+    WRITE = 'w'
+
     def __init__(self):
         self.read_actions = {
             'i' : functools.partial(self._read_value_from_xml_node, marshaller=xml2int), # int
             'h' : functools.partial(self._read_value_from_xml_node, marshaller=xml2int), # hex
             's' : functools.partial(self._read_value_from_xml_node, marshaller=escape_invalid_chars), # string
-            'n' : self.read # node
+            'n' : self.read, # node
+            'c' : self._do_callback # callback on another object, for complex actions
         }
         self.write_actions = {
             'i' : functools.partial(self._write_value_to_xml_node, marshaller=int2xml), # int
             'h' : functools.partial(self._write_value_to_xml_node, marshaller=hex2xml), # hex
             's' : functools.partial(self._write_value_to_xml_node, marshaller=unescape_invalid_chars), # string
-            'n' : self.write # node
+            'n' : self.write, # node
+            'c' : self._do_callback # callback on another object, for complex actions
         }
 
     def read(self, destination, parent_node, structure):
         for name, marshaller, attr in structure:
             node = parent_node.find(name)
-            self.read_actions[marshaller](destination, node, attr)
+            if marshaller == 'c':
+                self._do_callback(destination, attr, node, XMLHelper.READ)
+            else:
+                self.read_actions[marshaller](destination, node, attr)
 
     def _read_value_from_xml_node(self, destination, node, attr, marshaller):
         value = marshaller(node.text) # doesn't support "attributes" of nodes, just values
@@ -157,7 +165,14 @@ class XMLHelper(object):
     def write(self, caller, parent_node, structure):
         for name, marshaller, attr in structure:
             node = et.SubElement(parent_node, name)
-            self.write_actions[marshaller](caller, node, attr)
+            if marshaller == 'c':
+                self._do_callback(attr, node, XMLHelper.WRITE)
+            else:
+                self.write_actions[marshaller](caller, node, attr)
+
+    def _do_callback(self, destination, callback_name, node, mode):
+        callback_func = getattr(destination, callback_name)
+        callback_func(node, mode)
             
 xml_helper = XMLHelper()
 

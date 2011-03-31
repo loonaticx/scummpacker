@@ -5,25 +5,10 @@ import os
 import scummpacker_control as control
 import scummpacker_util as util
 from common import *
+from shared import BlockDefaultSharedV5V6
 
-class BlockDefaultV5(AbstractBlock):
-    def _read_header(self, resource, decrypt):
-        # Should be reversed for old format resources
-        self.name = self._read_name(resource, decrypt)
-        self.size = self._read_size(resource, decrypt)
-
-    def _write_header(self, outfile, encrypt):
-        name = util.crypt(self.name, self.crypt_value) if encrypt else self.name
-        outfile.write(name)
-        size = util.int2str(self.size, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
-        outfile.write(size)
-
-    def _write_dummy_header(self, outfile, encrypt):
-        """Writes placeholder information (block name, block size of 0)"""
-        name = util.crypt(self.name, self.crypt_value) if encrypt else self.name
-        outfile.write(name)
-        size = util.int2str(0, is_BE=util.BE, crypt_val=(self.crypt_value if encrypt else None))
-        outfile.write(size)
+class BlockDefaultV5(BlockDefaultSharedV5V6):
+    pass
 
 class BlockSoundV5(BlockDefaultV5):
     """ Sound blocks store incorrect block size (it doesn't include the SOU/ADL/SBL header size)"""
