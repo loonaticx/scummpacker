@@ -320,6 +320,7 @@ class BlockGloballyIndexed(AbstractBlock):
         try:
             self._lookup_index(location, room_start)
         except util.ScummPackerUnrecognisedIndexException, suie:
+            logging.debug("name: %s" % self.name)
             self._handle_unknown_index(location, room_start)
 
     def _lookup_index(self, location, room_start):
@@ -459,10 +460,11 @@ class BlockLucasartsFile(BlockContainer, BlockGloballyIndexed):
         self._read_header(resource, True)
         self._read_data(resource, location, True, location)
         try:
-            self.index = control.global_index_map.get_index(self.name, location)
+            self.index = control.global_index_map.get_index(self.name, location)  # TODO: confirm if this is correct
         except util.ScummPackerUnrecognisedIndexException, suie:
             logging.error(("Block \"%s\" at offset %s has no entry in the index file (.000). " + 
                           "It can not be re-packed or used in the game.") % (self.name, location))
+            raise suie
             self.is_unknown = True
             self.index = control.unknown_blocks_counter.get_next_index(self.name)
 
@@ -538,7 +540,7 @@ class BlockRoomOffsets(AbstractBlock):
                 lf_offset = util.str2int(resource.read(4),
                                             crypt_val=(self.crypt_value if decrypt else None))
                 room_offset = lf_offset + 2 + self.block_name_length + 4 # add 2 bytes for the room number/index of LF block. 
-            control.global_index_map.map_index(self.LFLF_NAME, (control.disk_spanning_counter, lf_offset), room_no)
+            control.global_index_map.map_index(self.LFLF_NAME, (control.disk_spanning_counter, lf_offset), room_no) # TODO: confirm if this is correct
             control.global_index_map.map_index(self.ROOM_OFFSET_NAME, room_no, room_offset) # HACK
 
     def save_to_file(self, path):

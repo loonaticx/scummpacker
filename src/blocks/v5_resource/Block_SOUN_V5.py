@@ -12,7 +12,7 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
 
     name = "SOUN"
     lf_name = "LFLF"
-    room_offset_name = "LOFF"
+    room_offset_name = "ROOM"
 
     def __init__(self, *args, **kwds):
         super(BlockSOUNV5, self).__init__(*args, **kwds)

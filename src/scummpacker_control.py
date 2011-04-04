@@ -49,6 +49,8 @@ class IndexMappingContainer(object):
         return self.__getitem__(map_name, key)
     
     def __getitem__(self, map_name, key):
+        logging.debug(map_name)
+        logging.debug(self.index_map[map_name])
         if not map_name in self.index_map:
             raise util.ScummPackerException("Unrecognised block \"" 
                                             + str(map_name) 
