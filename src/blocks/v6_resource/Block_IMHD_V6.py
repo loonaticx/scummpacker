@@ -1,8 +1,9 @@
 import xml.etree.ElementTree as et
 import scummpacker_util as util
 from blocks.v6_base import BlockDefaultV6
+import struct
 
-class BlockIMHDV5(BlockDefaultV6):
+class BlockIMHDV6(BlockDefaultV6):
     name = "IMHD"
     xml_structure = (
         ("image", 'n',
@@ -20,8 +21,8 @@ class BlockIMHDV5(BlockDefaultV6):
         ),
     )
     struct_data = {
-        'size' : 16,
-        'format' : "<3H2B4H",
+        'size' : 18,
+        'format' : "<3H2B5H",
         'attributes' :
             ('obj_id',
             'num_imnn',
@@ -31,7 +32,8 @@ class BlockIMHDV5(BlockDefaultV6):
             'x',
             'y',
             'width',
-            'height')
+            'height',
+            'num_hotspots')
     }
 
     def _read_data(self, resource, start, decrypt, room_start=0):
@@ -53,10 +55,20 @@ class BlockIMHDV5(BlockDefaultV6):
           y          : 16le signed
         """
         self.read_struct_data(resource, decrypt)
+        hotspots = []
+        for i in xrange(self.num_hotspots):
+            data = resource.read(4)
+            if decrypt:
+                data = util.crypt(data, self.crypt_value)
+            x, y = struct.unpack('<2H', data)
+            hotspots.append((x, y))
+        self.size += self.num_hotspots * 2
+            
 
     def load_from_file(self, path):
         self.name = "IMHD"
-        self.size = 16 + 8 # data + block header
+        # Note: size has to be adjusted by hotspot.
+        self.size = self.struct_data['size'] + 8 # data + block header
         self._load_header_from_xml(path)
 
     def _load_header_from_xml(self, path):
@@ -75,6 +87,7 @@ class BlockIMHDV5(BlockDefaultV6):
     def _write_data(self, resource, encrypt):
         self.write_struct_data(resource, encrypt)
 
+
     def do_hotspots_callback(self, node, mode):
         if mode == 'r':
             self._read_hotspots_from_XML(node)
@@ -91,6 +104,7 @@ class BlockIMHDV5(BlockDefaultV6):
             y = util.xml2int(hn.find("y").text)
             hotspots.append((x, y))
         self.hotspots = hotspots
+        self.size += len(hotspots) * 2 # need to adjust size
 
     def _write_hotspots_to_XML(self, node):
         for x, y in self.hotspots:

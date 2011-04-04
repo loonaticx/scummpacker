@@ -1,5 +1,5 @@
 import blocks
-from v5 import *
+from dispatchers.v5 import *
 
 INDEXED_BLOCKS_V6 = (
     "ROOM",
@@ -16,6 +16,8 @@ class BlockDispatcherV6(BlockDispatcherV5):
     debug = True
     BLOCK_MAP = dict(BlockDispatcherV5.BLOCK_MAP)
     BLOCK_MAP.update({
+        "OBIM" : blocks.BlockOBIMV6,
+        "OBCD" : blocks.BlockOBCDV6,
         "LFLF" : blocks.BlockLFLFV6,
         "ROOM" : blocks.BlockROOMV6,
         "PALS" : blocks.BlockContainerV6,

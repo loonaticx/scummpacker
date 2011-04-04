@@ -1,4 +1,3 @@
-import struct
 import xml.etree.ElementTree as et
 import scummpacker_util as util
 from blocks.v5_base import BlockDefaultV5
