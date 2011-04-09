@@ -46,9 +46,14 @@ class ResourceHandler(object):
                    ("DISK%NN%", "LEC"),
                    dummy_set
                    ),
-        "MI1CD" : (SINGLE_FILE,
-                  ("MONKEY", "000"),
+        "MI1CDalt" : (SINGLE_FILE, # crap
+                  ("MONKEY", "000"), # TODO: confirm if this is correct
                   ("MONKEY", "001"),
+                  dummy_set
+                  ),
+        "MI1CD" : (SINGLE_FILE,
+                  ("MONKEY1", "000"), # TODO: confirm if this is correct
+                  ("MONKEY1", "001"),
                   dummy_set
                   ),
         "MI2" : (SINGLE_FILE,

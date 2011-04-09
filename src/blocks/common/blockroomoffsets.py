@@ -24,7 +24,7 @@ class BlockRoomOffsets(AbstractBlock):
                 lf_offset = util.str2int(resource.read(4),
                                             crypt_val=(self.crypt_value if decrypt else None))
                 room_offset = lf_offset + 2 + self.block_name_length + 4 # add 2 bytes for the room number/index of LF block.
-            control.global_index_map.map_index(self.LFLF_NAME, (control.disk_spanning_counter, lf_offset), room_no) # TODO: confirm if this is correct
+            control.global_index_map.map_index(self.LFLF_NAME, (control.disk_spanning_counter, lf_offset), room_no)
             control.global_index_map.map_index(self.ROOM_OFFSET_NAME, room_no, room_offset) # HACK
 
     def save_to_file(self, path):

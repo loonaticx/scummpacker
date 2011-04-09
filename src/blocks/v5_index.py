@@ -94,6 +94,7 @@ class BlockDROOV5(BlockRoomIndexes, BlockDefaultV5):
         # Ooooh some more stuff for V6! Hackorama!
         "DOTT" : 91,
     }
+    default_disk_or_room_number = 1 # this is quite vital!
     
     def _read_data(self, resource, start, decrypt, room_start=0):
         """We just don't care."""

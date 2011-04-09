@@ -38,7 +38,7 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
         if self.is_cd_track:
             outfile = file(os.path.join(path, self.generate_file_name()), 'wb')
             self._write_header(outfile, False)
-            self._write_raw_data(outfile, False)
+            self._write_raw_data(outfile, self.data, False)
             outfile.close()
         else:
             newpath = self._create_directory(path)
@@ -52,7 +52,7 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
                                            (room_num, location - room_offset),
                                            self.index)
         if self.is_cd_track:
-            self._write_header(resource, self.data, True)
+            self._write_header(resource, True)
             self._write_raw_data(resource, self.data, True)
         else:
             super(BlockSOUNV5, self).save_to_resource(resource, room_start)
@@ -79,7 +79,7 @@ class BlockSOUNV5(BlockContainerV5, BlockGloballyIndexedV5):
             self.children = []
             soun_file = file(path, 'rb')
             self._read_header(soun_file, False)
-            self._read_data(soun_file, 0, False, room_start)
+            self._read_data(soun_file, 0, False)
             soun_file.close()
 
     def generate_file_name(self):
