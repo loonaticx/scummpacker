@@ -133,7 +133,7 @@ class BlockMIDISoundV5(BlockSoundV5):
         self.mdhd_header = mdhd_data
         self.size = os.path.getsize(path) # size does not include ADL/ROL block header
         midi_file = file(path, 'rb')
-        self._read_data(midi_file, 0, False, room_start)
+        self._read_data(midi_file, 0, False)
         midi_file.close()
 
     def save_to_file(self, path):
@@ -202,7 +202,7 @@ class BlockIndexDirectoryV5(BlockIndexDirectory, BlockDefaultV5):
             "DSCR" : 200,
             "DSOU" : 250,
             "DCOS" : 244,
-            "DCHR" : 6
+            "DCHR" : 5 # Talkie version is 6, floppy is 5.
         },
         # V6 stuff
         "DOTT" : {

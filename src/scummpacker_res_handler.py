@@ -108,7 +108,10 @@ class ResourceHandler(object):
             control.disk_spanning_counter = resource_counter
             with file(res_name, 'rb') as res_file:
                 resources.append(control.block_dispatcher.dispatch_and_load_from_resource(res_file))
-            resource_counter += 1
+            if spanning == self.SINGLE_FILE:
+                break
+            else:
+                resource_counter += 1
             
         # Save to files
         logging.normal("Saving to files...")        
@@ -155,7 +158,10 @@ class ResourceHandler(object):
             logging.normal("Reading from %s" % res_name)
             control.disk_spanning_counter = resource_counter
             resources.append(control.file_dispatcher.dispatch_and_load_from_file(res_name))
-            resource_counter += 1        
+            if spanning == self.SINGLE_FILE:
+                break
+            else:
+                resource_counter += 1
         index_block = control.index_dispatcher.dispatch_and_load_from_file(control.global_args.input_file_name)
         
         # Save to resources
