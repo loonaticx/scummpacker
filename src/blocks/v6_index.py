@@ -63,7 +63,7 @@ class BlockMAXSV6(BlockDefaultV5):
         Costumes	   (2 bytes)
         Global Objects	   (2 bytes)
         """
-        self.read_struct_data(resource, decrypt)
+        self.read_struct_data(self.struct_data, resource, decrypt)
 
     def save_to_file(self, path):
         root = et.Element("maximums")
@@ -85,7 +85,7 @@ class BlockMAXSV6(BlockDefaultV5):
 
     def _write_data(self, resource, encrypt):
         """ Assumes it's writing to a resource."""
-        self.write_struct_data(resource, encrypt)
+        self.write_struct_data(self.struct_data, resource, encrypt)
 
 
 class BlockAARYV6(BlockDefaultV5):

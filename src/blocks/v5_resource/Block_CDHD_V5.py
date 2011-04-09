@@ -48,11 +48,11 @@ class BlockCDHDV5(BlockDefaultV5):
           actor dir : 8 (direction the actor will look at when standing in front
                          of the object)
         """
-        self.read_struct_data(resource, decrypt)
+        self.read_struct_data(self.struct_data, resource, decrypt)
 
     def load_from_file(self, path):
         self.name = "CDHD"
-        self.size = 13 + 8 # data + header
+        self.size = self.struct_data['size'] + 8 # data + header
         self._load_header_from_xml(path)
 
     def _load_header_from_xml(self, path):
@@ -67,5 +67,5 @@ class BlockCDHDV5(BlockDefaultV5):
 
     def _write_data(self, resource, encrypt):
         """ Assumes it's writing to a resource."""
-        self.write_struct_data(resource, encrypt)
+        self.write_struct_data(self.struct_data, resource, encrypt)
 

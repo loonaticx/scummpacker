@@ -48,7 +48,7 @@ class BlockCDHDV6(BlockDefaultV6):
           actor dir : 8 (direction the actor will look at when standing in front
                          of the object)
         """
-        self.read_struct_data(resource, decrypt)
+        self.read_struct_data(self.struct_data, resource, decrypt)
 
     def load_from_file(self, path):
         self.name = "CDHD"
@@ -67,5 +67,5 @@ class BlockCDHDV6(BlockDefaultV6):
 
     def _write_data(self, resource, encrypt):
         """ Assumes it's writing to a resource."""
-        self.write_struct_data(resource, encrypt)
+        self.write_struct_data(self.struct_data, resource, encrypt)
 

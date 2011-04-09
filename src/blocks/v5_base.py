@@ -206,11 +206,11 @@ class BlockIndexDirectoryV5(BlockIndexDirectory, BlockDefaultV5):
         },
         # V6 stuff
         "DOTT" : {
-            # TODO: replace these dummy values with the correct values
-            "DSCR" : 200,
-            "DSOU" : 250,
-            "DCOS" : 244,
-            "DCHR" : 6
+            # Based on the floppy version.
+            "DSCR" : 156,
+            "DSOU" : 103,
+            "DCOS" : 397,
+            "DCHR" : 8
         }
     }
 

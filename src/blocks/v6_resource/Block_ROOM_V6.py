@@ -7,7 +7,7 @@ class BlockROOMV6(BlockRoom, BlockContainerV6): # also globally indexed
     def _init_class_data(self):
         self.name = "ROOM"
         self.lf_name = "LFLF"
-        self.room_offset_name = "LOFF"
+        self.room_offset_name = "ROOM"
         self.script_types = frozenset(["ENCD",
                                   "EXCD",
                                   "LSCR"])

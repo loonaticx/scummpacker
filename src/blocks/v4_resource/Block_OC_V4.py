@@ -54,7 +54,7 @@ class BlockOCV4(BlockDefaultV4):
           verb table : variable
           obj_name  : variable, null-terminated
         """
-        self.read_struct_data(resource, decrypt)
+        self.read_struct_data(self.struct_data, resource, decrypt)
 
         self.parent_state = self.y_and_parent_state & 0x80
         self.y = self.y_and_parent_state & 0x7F
@@ -140,7 +140,7 @@ class BlockOCV4(BlockDefaultV4):
         self.name_offset = 6 + 13 + len(self.event_table)
 
         # Object header
-        self.write_struct_data(outfile, encrypt)
+        self.write_struct_data(self.struct_data, outfile, encrypt)
         del self.y_and_parent_state # cleanup
         del self.height_and_actor_dir
         del self.name_offset

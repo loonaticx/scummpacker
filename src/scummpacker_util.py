@@ -166,7 +166,7 @@ class XMLHelper(object):
         for name, marshaller, attr in structure:
             node = et.SubElement(parent_node, name)
             if marshaller == 'c':
-                self._do_callback(attr, node, XMLHelper.WRITE)
+                self._do_callback(caller, attr, node, XMLHelper.WRITE)
             else:
                 self.write_actions[marshaller](caller, node, attr)
 

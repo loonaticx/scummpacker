@@ -147,30 +147,30 @@ class IndexBlockContainerV5(AbstractIndexDispatcher):
 
         # Crappy crappy crap
         # It's like this because blocks need to be in a specific order
-        rnam_block = blocks.BlockRNAMV5(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
+        rnam_block = self.BLOCK_MAP["RNAM"](self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
         rnam_block.load_from_file(os.path.join(path, "roomnames.xml"))
         self.children.append(rnam_block)
 
-        maxs_block = blocks.BlockMAXSV5(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
+        maxs_block = self.BLOCK_MAP["MAXS"](self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
         maxs_block.load_from_file(os.path.join(path, "maxs.xml"))
         self.children.append(maxs_block)
 
-        d_block = blocks.BlockDROOV5(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
+        d_block = self.BLOCK_MAP["DROO"](self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
         self.children.append(d_block)
-        d_block = blocks.BlockIndexDirectoryV5(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
+        d_block = self.BLOCK_MAP["DSCR"](self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
         d_block.name = "DSCR"
         self.children.append(d_block)
-        d_block = blocks.BlockIndexDirectoryV5(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
+        d_block = self.BLOCK_MAP["DSOU"](self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
         d_block.name = "DSOU"
         self.children.append(d_block)
-        d_block = blocks.BlockIndexDirectoryV5(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
+        d_block = self.BLOCK_MAP["DCOS"](self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
         d_block.name = "DCOS"
         self.children.append(d_block)
-        d_block = blocks.BlockIndexDirectoryV5(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
+        d_block = self.BLOCK_MAP["DCHR"](self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
         d_block.name = "DCHR"
         self.children.append(d_block)
 
-        dobj_block = blocks.BlockDOBJV5(self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
+        dobj_block = self.BLOCK_MAP["DOBJ"](self.BLOCK_NAME_LENGTH, self.CRYPT_VALUE)
         dobj_block.load_from_file(os.path.join(path, "dobj.xml"))
         self.children.append(dobj_block)
 

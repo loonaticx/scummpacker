@@ -101,15 +101,15 @@ class AbstractBlock(object):
         either from a containing block, or from the "load_from_file" method."""
         util.xml_helper.read(self, parent_node, self.xml_structure)
 
-    def write_struct_data(self, resource, encrypt):
+    def write_struct_data(self, struct_data, resource, encrypt):
         """ Saves struct-packed data to the given resource.
 
         Not used by every block. To use it, the "struct_data" property
         should be populated, and this method must be specifically called,
         either from a containing block, or from the "save_to_resource" method."""
-        s_size = self.struct_data['size']
-        s_format = self.struct_data['format']
-        s_attributes = self.struct_data['attributes']
+        s_size = struct_data['size']
+        s_format = struct_data['format']
+        s_attributes = struct_data['attributes']
 
         data = struct.pack(s_format, *[getattr(self, a) for a in s_attributes])
         if encrypt:
@@ -117,15 +117,15 @@ class AbstractBlock(object):
         assert len(data) == s_size
         resource.write(data)
 
-    def read_struct_data(self, resource, decrypt):
+    def read_struct_data(self, struct_data, resource, decrypt):
         """ Reads data from the given resource.
 
         Not used by every block. To use it, the "xml_structure" property
         should be populated, and this method must be specifically called,
         either from a containing block, or from the "load_from_resource" method."""
-        s_size = self.struct_data['size']
-        s_format = self.struct_data['format']
-        s_attributes = self.struct_data['attributes']
+        s_size = struct_data['size']
+        s_format = struct_data['format']
+        s_attributes = struct_data['attributes']
 
         data = resource.read(s_size)
         if decrypt:

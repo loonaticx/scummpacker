@@ -51,7 +51,7 @@ class BlockIMHDV5(BlockDefaultV5):
           x          : 16le signed
           y          : 16le signed
         """
-        self.read_struct_data(resource, decrypt)
+        self.read_struct_data(self.struct_data, resource, decrypt)
 
     def load_from_file(self, path):
         self.name = "IMHD"
@@ -72,4 +72,4 @@ class BlockIMHDV5(BlockDefaultV5):
         return
 
     def _write_data(self, resource, encrypt):
-        self.write_struct_data(resource, encrypt)
+        self.write_struct_data(self.struct_data, resource, encrypt)
