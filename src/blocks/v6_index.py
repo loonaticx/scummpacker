@@ -112,9 +112,9 @@ class BlockAARYV6(BlockDefaultV5):
         for num, a, b, c in self.arrays:
             array_node = et.SubElement(root, "array-entry")
             et.SubElement(array_node, "num").text = util.int2xml(num)
-            et.SubElement(array_node, "a").text = util.int2xml(num)
-            et.SubElement(array_node, "b").text = util.int2xml(num)
-            et.SubElement(array_node, "c").text = util.int2xml(num)
+            et.SubElement(array_node, "a").text = util.int2xml(a)
+            et.SubElement(array_node, "b").text = util.int2xml(b)
+            et.SubElement(array_node, "c").text = util.int2xml(c)
 
         util.indent_elementtree(root)
         et.ElementTree(root).write(os.path.join(path, "aary.xml"))
@@ -131,9 +131,9 @@ class BlockAARYV6(BlockDefaultV5):
             c = util.xml2int(array_node.find("c").text)
             self.arrays.append( (num, a, b, c) )
 
-        # each array definition is 8 bytes, plus 1 byte to mark the end of
+        # each array definition is 8 bytes, plus 2 bytes to mark the end of
         #  the AARY block.
-        self.size = len(self.arrays) * 8 + 1 + self.block_name_length + 4
+        self.size = len(self.arrays) * 8 + 2 + self.block_name_length + 4
 
     def save_to_resource(self, resource, room_start=0):
         self._write_header(resource, True)

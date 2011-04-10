@@ -1,4 +1,5 @@
 import os
+import re
 import blocks
 from dispatchers.v5 import *
 
@@ -21,7 +22,8 @@ class BlockDispatcherV6(BlockDispatcherV5):
         "LFLF" : blocks.BlockLFLFV6,
         "ROOM" : blocks.BlockROOMV6,
         "PALS" : blocks.BlockContainerV6,
-        "WRAP" : blocks.BlockContainerV6
+        "WRAP" : blocks.BlockWRAPV6,
+        "APAL" : blocks.BlockAPALV6
         # OFFS and APAL will use default blocks for now.
     })
 
@@ -29,15 +31,35 @@ class FileDispatcherV6(FileDispatcherV5):
     BLOCK_MAP = dict(FileDispatcherV5.BLOCK_MAP)
     BLOCK_MAP.update({
         "PALS" : blocks.BlockContainerV6,
-        "WRAP" : blocks.BlockContainerV6,
+        "WRAP" : blocks.BlockWRAPV6,
         #"OBIM" : blocks.BlockOBIMV6,
         #"OBCD" : blocks.BlockOBCDV6,
         #"LFLF" : blocks.BlockLFLFV6,
         r"objects" : blocks.ObjectBlockContainerV6,
         "ROOM" : blocks.BlockROOMV6,
-        "APAL.dmp" : blocks.BlockDefaultV6,
+        "APAL.dmp" : blocks.BlockAPALV6,
         "OFFS.dmp" : blocks.BlockDefaultV6
     })
+
+    # Unfortunately I can't think of a neat way to override the inherited list,
+    #  without duplicating the whole list.
+    REGEX_BLOCKS = [
+        # LECF
+        (re.compile(r"LFLF_[0-9]{3}.*"), blocks.BlockLFLFV6), # new
+        # -LFLF
+        (re.compile(r"SOUN_[0-9]{3}(?:\.dmp)?"), blocks.BlockSOUNV5),
+        (re.compile(r"CHAR_[0-9]{3}"), blocks.BlockGloballyIndexedV5),
+        (re.compile(r"COST_[0-9]{3}"), blocks.BlockGloballyIndexedV5),
+        (re.compile(r"SCRP_[0-9]{3}"), blocks.BlockGloballyIndexedV5),
+        # --ROOM
+        # ---objects
+        (re.compile(r"IM[0-9a-fA-F]{2}"), blocks.BlockContainerV5), # also RMIM
+        (re.compile(r"ZP[0-9a-fA-F]{2}\.dmp"), blocks.BlockDefaultV5), # also RMIM
+        # --scripts
+        (re.compile(r"LSCR_[0-9]{3}\.dmp"), blocks.BlockLSCRV5),
+        # images
+        (re.compile(r"APAL_[0-9]{3}.*"), blocks.BlockAPALV6) # new
+    ]
 
 class IndexBlockContainerV6(IndexBlockContainerV5):
     debug = True

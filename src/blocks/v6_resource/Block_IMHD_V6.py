@@ -56,7 +56,7 @@ class BlockIMHDV6(BlockDefaultV6):
         """
         self.read_struct_data(self.struct_data, resource, decrypt)
         hotspots = []
-        for i in xrange(self.num_hotspots):
+        for _ in xrange(self.num_hotspots):
             data = resource.read(4)
             if decrypt:
                 data = util.crypt(data, self.crypt_value)
@@ -111,7 +111,6 @@ class BlockIMHDV6(BlockDefaultV6):
         self.hotspots = hotspots
         self.num_hotspots = len(hotspots)
         self.size += len(hotspots) * 2 * 2 # need to adjust size. * 2 for x, y, * 2 for 16-bits
-        self.size += 2 # also account for "num_hotspots"
 
     def _write_hotspots_to_XML(self, node):
         for x, y in self.hotspots:
