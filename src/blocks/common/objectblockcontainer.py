@@ -47,7 +47,11 @@ class ObjectBlockContainer(object):
             os.mkdir(objects_path) # throws an exception if can't create dir
         for objimage, objcode in self.objects.values():
             # New path name = Object ID + object name (removing trailing spaces)
-            obj_path_name = str(objcode.obj_id).zfill(self.obj_id_name_length) + "_" + util.discard_invalid_chars(objcode.obj_name).rstrip()
+            if objcode is None or objimage is None:
+                raise util.ScummPackerException("Object is missing either the code block or the image block! Dump follows.\n%s" % (self.objects,))
+            obj_id = objcode.obj_id
+            obj_name = objcode.obj_name
+            obj_path_name = str(obj_id).zfill(self.obj_id_name_length) + "_" + util.discard_invalid_chars(obj_name).rstrip()
             newpath = os.path.join(objects_path, obj_path_name)
             if not os.path.isdir(newpath):
                 os.mkdir(newpath) # throws an exception if can't create dir

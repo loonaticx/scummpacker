@@ -23,22 +23,24 @@ class BlockDispatcherV6(BlockDispatcherV5):
         "ROOM" : blocks.BlockROOMV6,
         "PALS" : blocks.BlockContainerV6,
         "WRAP" : blocks.BlockWRAPV6,
-        "APAL" : blocks.BlockAPALV6
-        # OFFS and APAL will use default blocks for now.
+        "APAL" : blocks.BlockAPALV6,
+        "MIDI" : blocks.BlockMIDIV6,
+        "SOUN" : blocks.BlockSOUNV6
     })
 
 class FileDispatcherV6(FileDispatcherV5):
     BLOCK_MAP = dict(FileDispatcherV5.BLOCK_MAP)
     BLOCK_MAP.update({
-        "PALS" : blocks.BlockContainerV6,
-        "WRAP" : blocks.BlockWRAPV6,
+        r"PALS" : blocks.BlockContainerV6,
+        r"WRAP" : blocks.BlockWRAPV6,
         #"OBIM" : blocks.BlockOBIMV6,
         #"OBCD" : blocks.BlockOBCDV6,
         #"LFLF" : blocks.BlockLFLFV6,
         r"objects" : blocks.ObjectBlockContainerV6,
-        "ROOM" : blocks.BlockROOMV6,
-        "APAL.dmp" : blocks.BlockAPALV6,
-        "OFFS.dmp" : blocks.BlockDefaultV6
+        r"ROOM" : blocks.BlockROOMV6,
+        r"APAL.dmp" : blocks.BlockAPALV6,
+        r"OFFS.dmp" : blocks.BlockDefaultV6,
+        r"MIDI.mid" : blocks.BlockMIDIV6,
     })
 
     # Unfortunately I can't think of a neat way to override the inherited list,
@@ -47,7 +49,7 @@ class FileDispatcherV6(FileDispatcherV5):
         # LECF
         (re.compile(r"LFLF_[0-9]{3}.*"), blocks.BlockLFLFV6), # new
         # -LFLF
-        (re.compile(r"SOUN_[0-9]{3}(?:\.dmp)?"), blocks.BlockSOUNV5),
+        (re.compile(r"SOUN_[0-9]{3}(?:\.dmp)?"), blocks.BlockSOUNV6),
         (re.compile(r"CHAR_[0-9]{3}"), blocks.BlockGloballyIndexedV5),
         (re.compile(r"COST_[0-9]{3}"), blocks.BlockGloballyIndexedV5),
         (re.compile(r"SCRP_[0-9]{3}"), blocks.BlockGloballyIndexedV5),

@@ -66,6 +66,7 @@ class BlockContainerV6(BlockContainer, BlockDefaultV6):
          "ADL ",
          "SPK",
          "SPK ",
+         "MIDI",
         "COST",
         "CHAR"
     ]

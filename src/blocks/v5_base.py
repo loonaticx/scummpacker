@@ -211,6 +211,12 @@ class BlockIndexDirectoryV5(BlockIndexDirectory, BlockDefaultV5):
             "DSOU" : 103,
             "DCOS" : 397,
             "DCHR" : 8
+        },
+        "SAM" : {
+            "DSCR" : 123,
+            "DSOU" : 95,
+            "DCOS" : 341,
+            "DCHR" : 6
         }
     }
 

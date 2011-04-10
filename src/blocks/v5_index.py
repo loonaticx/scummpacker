@@ -93,6 +93,7 @@ class BlockDROOV5(BlockRoomIndexes, BlockDefaultV5):
         "FOA" : 99,
         # Ooooh some more stuff for V6! Hackorama!
         "DOTT" : 91,
+        "SAM" : 94,
     }
     default_disk_or_room_number = 1 # this is quite vital!
     

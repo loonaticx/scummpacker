@@ -1,4 +1,5 @@
 import xml.etree.ElementTree as et
+import scummpacker_control as control
 import scummpacker_util as util
 from blocks.v6_base import BlockDefaultV6
 
@@ -49,6 +50,17 @@ class BlockCDHDV6(BlockDefaultV6):
                          of the object)
         """
         self.read_struct_data(self.struct_data, resource, decrypt)
+
+        # HACK: Sam n Max has two OBCD entries for object ID 561, but none for
+        #  object ID 560 (room 58). Both objects are "rushmore-dino-jaw".
+        #  Work around it by manually re-assigning the ID based on the block's
+        #  position in the file.
+        #  The two OBCD blocks for 561 are actually different, but I'm
+        #  not sure how to decide which is which, so I've just chosen the first one.
+        if (control.global_args.game == "SAM" and
+                self.obj_id == 561 and
+                start == 0x00A6CF8F):
+            self.obj_id = 560
 
     def load_from_file(self, path):
         self.name = "CDHD"

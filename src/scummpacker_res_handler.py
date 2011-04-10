@@ -71,6 +71,11 @@ class ResourceHandler(object):
                  ("TENTACLE", "001"),
                  dummy_set
                  ),
+        "SAM" : (SINGLE_FILE,
+                ("SAMNMAX", "SM0"),
+                ("SAMNMAX", "SM1"),
+                dummy_set
+                )
 
     }
     
