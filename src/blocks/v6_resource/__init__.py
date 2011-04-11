@@ -8,3 +8,4 @@ from Block_APAL_V6 import *
 from Block_WRAP_V6 import *
 from Block_MIDI_V6 import *
 from Block_SOUN_V6 import *
+from Block_SOU_V6 import *

@@ -25,7 +25,9 @@ class BlockDispatcherV6(BlockDispatcherV5):
         "WRAP" : blocks.BlockWRAPV6,
         "APAL" : blocks.BlockAPALV6,
         "MIDI" : blocks.BlockMIDIV6,
-        "SOUN" : blocks.BlockSOUNV6
+        "SOUN" : blocks.BlockSOUNV6,
+        "GMD " : blocks.BlockMIDISoundV5, # DOTT CD
+        "SOU " : blocks.BlockSOUV6,
     })
 
 class FileDispatcherV6(FileDispatcherV5):
@@ -40,7 +42,9 @@ class FileDispatcherV6(FileDispatcherV5):
         r"ROOM" : blocks.BlockROOMV6,
         r"APAL.dmp" : blocks.BlockAPALV6,
         r"OFFS.dmp" : blocks.BlockDefaultV6,
-        r"MIDI.mid" : blocks.BlockMIDIV6,
+        r"MIDI.mid" : blocks.BlockMIDIV6, # Sam n Max floppy
+        r"GMD.mid" : blocks.BlockMIDISoundV5, # DOTT CD
+        r"SOU" : blocks.BlockSOUV6,
     })
 
     # Unfortunately I can't think of a neat way to override the inherited list,
@@ -62,6 +66,15 @@ class FileDispatcherV6(FileDispatcherV5):
         # images
         (re.compile(r"APAL_[0-9]{3}.*"), blocks.BlockAPALV6) # new
     ]
+
+    IGNORED_BLOCKS = frozenset([
+        r"ROL.mdhd",
+        r"SPK.mdhd",
+        r"ADL.mdhd",
+        r"SBL.mdhd",
+        r"GMD.mdhd",
+        r"order.xml"
+    ])
 
 class IndexBlockContainerV6(IndexBlockContainerV5):
     debug = True

@@ -59,7 +59,8 @@ class BlockCDHDV6(BlockDefaultV6):
         #  not sure how to decide which is which, so I've just chosen the first one.
         if (control.global_args.game == "SAM" and
                 self.obj_id == 561 and
-                start == 0x00A6CF8F):
+                (start == 0x00A6CF8F or # floppy version
+                 start == 0x00A7C4F2)): # talkie version
             self.obj_id = 560
 
     def load_from_file(self, path):

@@ -71,9 +71,14 @@ class ResourceHandler(object):
                  ("TENTACLE", "001"),
                  dummy_set
                  ),
-        "SAM" : (SINGLE_FILE,
-                ("SAMNMAX", "SM0"),
+        "SAMalt" : (SINGLE_FILE, # floppy version
+                ("SAMNMAX", "SM0"), # TODO: implement searching for alternate resource names
                 ("SAMNMAX", "SM1"),
+                dummy_set
+                ),
+        "SAM" : (SINGLE_FILE, # talkie version
+                ("SAMNMAX", "000"), # TODO: implement searching for alternate resource names 
+                ("SAMNMAX", "001"),
                 dummy_set
                 )
 

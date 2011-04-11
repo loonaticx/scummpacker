@@ -67,6 +67,8 @@ class BlockContainerV6(BlockContainer, BlockDefaultV6):
          "SPK",
          "SPK ",
          "MIDI",
+         "GMD",
+         "GMD ",
         "COST",
         "CHAR"
     ]
