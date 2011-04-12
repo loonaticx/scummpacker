@@ -7,7 +7,7 @@ Introduction
 ------------
 ScummPacker is a tool to unpack and re-pack the game resources used in Lucsarts adventure games.
 
-Lucasarts games are usually identified by the engine version. The engine is usually referred to as SCUMM (Script Creation Utility for Maniac Mansion). Currently, ScummPacker only supports SCUMM v5 games - Monkey Island 1 CD, Monkey Island 2, and Indiana Jones and the Fate of Atlantis.
+Lucasarts games are usually identified by the engine version. The engine is usually referred to as SCUMM (Script Creation Utility for Maniac Mansion). It has support for many different LucasArts games (SCUMM version 3ish to 6).
 
 ScummPacker has the capability to pack game resources for use within a certain game, or to target a generic SCUMM version; you could theoretically pack entirely new game resources, creating a new game. However, ScummPacker's primary use is for modifying existing game reources. If you're looking to make a new game, I suggest investigating either ScummC, ScummGen, or Adventure Game Studio. 
 
@@ -15,16 +15,16 @@ Some resources can be intelligently decoded; most header information is exported
 
 Usage
 -----
-To unpack a game, you must specify an input file and an output directory. ScummPacker can try to guess the SCUMM version and game based on the name of the input file, but you can specify these values manually.
+To unpack a game, you must specify an input file and an output directory and a game to target.
 
 --------------------------------------
-scummpacker -p -i D:\Games\MI2\MONKEY2.000 -o D:\temp
+scummpacker -g MI2 -i D:\temp\original -o D:\temp\unpacked -u
 --------------------------------------
 
 To pack a game, you must specify an input directory and an output file, AND either the game, or the SCUMM version to target.
 
 --------------------------------------
-scummpacker -u -i D:\temp -o D:\temp\MI2repack.000 -g MI2
+scummpacker -g MI2 -i D:\temp\unpacked -o D:\temp\packed -p
 --------------------------------------
 
 Here are the options useable in ScummPacker:
@@ -66,8 +66,11 @@ ScummPacker will replicate this padding. If a SCUMM version is specified but no 
 Adding more resources beyond the padding limit may work; then again, it may not.
 
  Default games for SCUMM versions:
+ - SCUMM v3 = Indiana Jones and the Holy Grail (256-colour version)
+ - SCUMM v3fm = Zak McKracken and the Alien Mindenders (FM-Towns version)
  - SCUMM v4 = Loom CD
- - SCUMM v5 = Monkey Island 2 
+ - SCUMM v5 = Monkey Island 2 - LeChuck's Revenge
+ - SCUMM v6 = Sam and Max Hit The Road
 
 Index Files and Resource Numbering
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -82,6 +85,10 @@ Some index files contain extra information that cannot be automatically generate
  - maxs.xml = maximum values, basically configuration options for the SCUMM engine.
  - roomnames.xml = human-readable names for the rooms in the game. Each name is limited to 9 characters. Seem to be only for developer's use.
 
+ SCUMM v6:
+ - aary.xml = array setup
+ - the rest same as v5
+ 
 MIDI Files
 ~~~~~~~~~~
 Generally, MIDI files are stored in the game resources with the same header information, but there are some exceptions. ScummPacker will normally use the default header information, but if the header is different, the following will occur:
@@ -120,17 +127,17 @@ SCUMM Version and Games
 ~~~~~~~~~~~~~~~~~~~~~~~
 Just in case you were wondering...
 
- SCUMM v2 (unsupported)
+ SCUMM v3 earlier? (unsupported)
  - Maniac Mansion
  - Zak McKracken and the Alien Mindbenders
 
- SCUMM v3 (unsupported)
+ SCUMM v3 later? (mostly supported)
  - Indiana Jones and the Last Crusade (EGA)
  - Indiana Jones and the Last Crusade (VGA)
  - Loom
  - Zak McKracken and the Alien Mindbenders (FM-TOWNS) 
 
- SCUMM v4 (unsupported)
+ SCUMM v4
  - Loom (CD)
  - Monkey Island 1 (EGA)
  - Monkey Island 1 (VGA)
@@ -140,9 +147,13 @@ Just in case you were wondering...
  - Monkey Island 1 (CD)
  - Monkey Island 2
 
- SCUMM v6 (unsupported)
+ SCUMM v6
  - Day of the Tentacle
  - Sam and Max Hit the Road
+ 
+ SCUMM v7 (unsupported)
+ - The Dig
+ - Full Throttle
 
 XML Files
 ~~~~~~~~~
@@ -154,11 +165,11 @@ Further technical information on the SCUMM resource formats can be found on the 
  
 Future Tasks
 ------------
-Support for other versions of SCUMM (V3, V4, maybe V6).
+Support for other versions of SCUMM (V3 old, V2, V7).
 
 Integrate with descumm to decompile scripts (once we can be sure that descumm's output is always correct).
 
-Decoding and encoding of images (room and objects).
+Decoding and encoding of images (room and objects). Integrate with SCUMM Image Encoder?
 
 Decoding and encoding of costumes. Probably requires intelligent handling of palettes.
 

@@ -4,14 +4,14 @@ from distutils.core import setup
 import py2exe
 
 # includes for py2exe
-includes=[]
+includes=['pyexpat', 'xml.etree.ElementTree', 'xml.etree.cElementTree']
 
 opts = { 'py2exe': { 'includes':includes } }
 #print 'opts',opts
 
-setup(version = "2.0",
-      description = "Scummpacker v2",
-      name = "Scummpacker v2",
+setup(version = "v3 r1",
+      description = "Scummpacker",
+      name = "Scummpacker",
       author = "Laurence Dougal Myers",
       author_email = "jestarjokin@jestarjokin.net",
       console = [

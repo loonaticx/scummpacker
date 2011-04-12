@@ -26,6 +26,8 @@ mkdir zip\%app_name%\docs
 xcopy src zip\%app_name%\src /E /EXCLUDE:setup_src_exclusions.txt
 xcopy test zip\%app_name%\test /E /EXCLUDE:setup_src_exclusions.txt
 copy *.bat zip\%app_name%\
+copy setup_src_exclusions.txt zip\%app_name%\
+copy test.py zip\%app_name%\
 xcopy docs\*.txt zip\%app_name%\docs
 
 cd zip
