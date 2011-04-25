@@ -108,16 +108,16 @@ class GlobalArguments(object):
                                description="Packs and unpacks resources used by LucasArts adventure games.")
         self.oparser.add_option("-v", "--scumm-version", action="store",
                            dest="scumm_version",
-                           choices=self.DEFAULT_GAME_FOR_SCUMM_VERSION.keys(),
+                           choices=sorted(self.DEFAULT_GAME_FOR_SCUMM_VERSION.keys()),
                            help="Specify the SCUMM version to target. " +
                            "Possible options are: " +
-                           ", ".join(self.DEFAULT_GAME_FOR_SCUMM_VERSION.keys()) + ". ")
+                           ", ".join(sorted(self.DEFAULT_GAME_FOR_SCUMM_VERSION.keys())) + ". ")
         self.oparser.add_option("-g", "--game", action="store",
                            dest="game",
-                           choices=self.SCUMM_VERSION_GAME_MAP.keys(),
+                           choices=sorted(self.SCUMM_VERSION_GAME_MAP.keys()),
                            help="Specify the game to target. " +
                            "Possible options are: " +
-                           ", ".join(self.SCUMM_VERSION_GAME_MAP.keys()) + ". ")
+                           ", ".join(sorted(self.SCUMM_VERSION_GAME_MAP.keys())) + ". ")
         self.oparser.add_option("-i", "--input", action="store",
                            dest="input_file_name",
                            help="Specify an input path, containing game resources.")

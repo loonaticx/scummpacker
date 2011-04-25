@@ -1,7 +1,7 @@
-ScummPacker v2
+ScummPacker v3
 ==============
 Laurence Dougal Myers <jestarjokin@jestarjokin.net>
-Doc v1.0, October 2010
+Doc v1.0, April 2011
 
 Introduction
 ------------
@@ -36,7 +36,7 @@ Here are the options useable in ScummPacker:
  -v SCUMM-VERSION, --scumm-version=SCUMM-VERSION
   Specify the SCUMM version to target. Possible options are: 3, 3fm, 4, 5, 6
  -g GAME, --game=GAME
-  Specify the game to target. Possible options are: LOOMCD, SAM, SAMalt, DOTT, INDY3VGA, MI1VGA, ZAKFM, FOA, MI1EGA, MI1CD, MI1CDalt, MI2.
+  Specify the game to target. Possible options are: DOTT, FOA, INDY3VGA, LOOMCD, MI1CD, MI1CDalt, MI1EGA, MI1VGA, MI2, SAM, SAMalt, ZAKFM.
  -i INPUT_FILE_NAME, --input-file-name=INPUT_FILE_NAME
   Specify an input path.
  -o OUTPUT_FILE_NAME, --output-file-name=OUTPUT_FILE_NAME
@@ -130,10 +130,10 @@ SCUMM Version and Games
  - Maniac Mansion
  - Zak McKracken and the Alien Mindbenders
 
- SCUMM v3 later? (mostly supported)
- - Indiana Jones and the Last Crusade (EGA)
+ SCUMM v3 later? (somewhat supported)
+ - Indiana Jones and the Last Crusade (EGA) (not supported)
  - Indiana Jones and the Last Crusade (VGA)
- - Loom
+ - Loom (not supported)
  - Zak McKracken and the Alien Mindbenders (FM-TOWNS) 
 
  SCUMM v4
