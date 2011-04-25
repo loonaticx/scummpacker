@@ -36,7 +36,7 @@ Here are the options useable in ScummPacker:
  -v SCUMM-VERSION, --scumm-version=SCUMM-VERSION
   Specify the SCUMM version to target. Possible options are: 3, 3fm, 4, 5, 6
  -g GAME, --game=GAME
-  Specify the game to target. Possible options are: LOOMCD, SAM, DOTT, INDY3VGA, MI1VGA, ZAKFM, FOA, MI1EGA, MI1CD, MI2.
+  Specify the game to target. Possible options are: LOOMCD, SAM, SAMalt, DOTT, INDY3VGA, MI1VGA, ZAKFM, FOA, MI1EGA, MI1CD, MI1CDalt, MI2.
  -i INPUT_FILE_NAME, --input-file-name=INPUT_FILE_NAME
   Specify an input path.
  -o OUTPUT_FILE_NAME, --output-file-name=OUTPUT_FILE_NAME

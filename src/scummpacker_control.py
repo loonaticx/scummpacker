@@ -81,10 +81,12 @@ class GlobalArguments(object):
         "MI1VGA" : "4",
         "LOOMCD" : "4",
         "MI1CD" : "5",
+        "MI1CDalt" : "5",
         "MI2" : "5",
         "FOA" : "5",
         "DOTT" : "6",
-        "SAM" : "6"
+        "SAM" : "6",
+        "SAMalt" : "6"
     }
     DEFAULT_GAME_FOR_SCUMM_VERSION = {
         "3fm" : "ZAKFM",
