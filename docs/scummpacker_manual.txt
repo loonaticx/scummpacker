@@ -34,13 +34,13 @@ Here are the options useable in ScummPacker:
  -h, --help 
   Print out options help
  -v SCUMM-VERSION, --scumm-version=SCUMM-VERSION
-  Specify the SCUMM version to target. Possible options are: 4, 5
+  Specify the SCUMM version to target. Possible options are: 3, 3fm, 4, 5, 6
  -g GAME, --game=GAME
-  Specify the game to target. Possible options are: LOOMCD, MI2, FOA, MI1CD
+  Specify the game to target. Possible options are: LOOMCD, SAM, DOTT, INDY3VGA, MI1VGA, ZAKFM, FOA, MI1EGA, MI1CD, MI2.
  -i INPUT_FILE_NAME, --input-file-name=INPUT_FILE_NAME
-  Specify an input file name. If unpacking, and an input file name is not specified, but the -g option is supplied, Scummpacker will try to guess the file name.
+  Specify an input path.
  -o OUTPUT_FILE_NAME, --output-file-name=OUTPUT_FILE_NAME
-  Specify an output file name. If unpacking, the output file name will have .000 and .001 appended. If the specified output file name already ends in .000 or .001, the name will be taken as everything preceding that extension.
+  Specify an output path.
  -u, --unpack
   Unpack resources.
  -p, --pack
@@ -125,7 +125,6 @@ The class data can be one of the following values:
 
 SCUMM Version and Games
 ~~~~~~~~~~~~~~~~~~~~~~~
-Just in case you were wondering...
 
  SCUMM v3 earlier? (unsupported)
  - Maniac Mansion

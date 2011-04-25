@@ -36,6 +36,7 @@ class BlockDispatcherV5(AbstractBlockDispatcher):
         "SPK " : blocks.BlockMIDISoundV5,
         "ADL " : blocks.BlockMIDISoundV5,
         "SBL " : blocks.BlockSBLV5,
+        "GMD " : blocks.BlockMIDISoundV5,
 
         # Globally indexed blocks
         "COST" : blocks.BlockGloballyIndexedV5,

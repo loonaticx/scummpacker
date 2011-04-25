@@ -92,6 +92,10 @@ class ResourceHandler(object):
             spanning, (index_name, index_ext), (resource_name, resource_ext), ignored_res = self.RESOURCE_FILE_TEMPLATES_PER_GAME[control.global_args.game]
         except KeyError:
             raise util.ScummPackerException("No resource file template defined for game: %s" % control.global_args.game)
+        # HACK: support alternative resource names. TODO: do this better.
+        if control.global_args.game.endswith('alt'):
+            control.global_args.game = control.global_args.game[:-3]
+
         # Load from resources
         logging.normal("Loading from game resources...")
         base_path = control.global_args.input_file_name
