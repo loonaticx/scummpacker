@@ -68,7 +68,11 @@ class BlockRoomOffsets(AbstractBlock):
 
             num_of_rooms = len(room_table)
             resource.write(util.int2str(num_of_rooms, 1, crypt_val=self.crypt_value))
-            for lf_offset, room_num in room_table:
+            for lflf_item, room_num in room_table:
+                if isinstance(lflf_item, tuple):
+                    lf_offset = lflf_item[1]
+                else:
+                    lf_offset = lflf_item
                 room_num = int(room_num)
                 resource.write(util.int2str(room_num, 1, crypt_val=self.crypt_value))
                 resource.write(util.int2str(lf_offset, 4, util.LE, self.crypt_value))

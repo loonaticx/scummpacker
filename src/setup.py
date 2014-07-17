@@ -9,7 +9,7 @@ includes=['pyexpat', 'xml.etree.ElementTree', 'xml.etree.cElementTree']
 opts = { 'py2exe': { 'includes':includes } }
 #print 'opts',opts
 
-setup(version = "3.1a",
+setup(version = "3.2",
       description = "Scummpacker",
       name = "Scummpacker",
       author = "Laurence Dougal Myers",
