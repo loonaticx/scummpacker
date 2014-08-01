@@ -3,7 +3,7 @@
 Use, distribution, and modification of the ScummPacker binaries, source code,
 or documentation, is subject to the terms of the MIT license, as below.
 
-Copyright (c) 2011 Laurence Dougal Myers
+Copyright (c) 2008-2014 Laurence Dougal Myers
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -31,9 +31,6 @@ import scummpacker_control as control
 import scummpacker_res_handler as res_handler
 import scummpacker_util as util
 
-
-__author__="Laurence Dougal Myers"
-__date__ ="$22/12/2009 16:52:52$"
 
 if sys.version_info[0] < 2 or (sys.version_info[0] == 2 and sys.version_info[1] < 5):
     raise util.ScummPackerException("ScummPacker requires Python 2.5 or higher.")
