@@ -1,7 +1,7 @@
 ScummPacker v3
 ==============
 Laurence Dougal Myers <jestarjokin@jestarjokin.net>
-Doc v1.0, April 2011
+Doc v1.1, August 2014
 
 Introduction
 ------------
@@ -176,11 +176,15 @@ Support
 -------
 This program and its source code is available at <http://www.jestarjokin.net>.
 
+The source code repository is available at BitBucket: <https://bitbucket.org/jestar_jokin/scummpacker>.
+
+Any issues can be raised as tickets on BitBucket: <https://bitbucket.org/jestar_jokin/scummpacker/issues>.
+
 Any enquiries can be sent directly to Laurence at <jestarjokin@jestarjokin.net>.
 
 License
 -------
-This program is released into the public domain.
+This program is license under the conditions of the MIT license: <http://opensource.org/licenses/MIT>
 
 ifdef::backend-docbook[]
 Index
