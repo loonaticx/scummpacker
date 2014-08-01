@@ -29,12 +29,10 @@ class BlockRoom(BlockContainer): # also globally indexed
         object_container = self.object_container_class(self.block_name_length, self.crypt_value)
         script_container = self.script_container_class(self.block_name_length, self.crypt_value)
         while resource.tell() < end:
-            if control.global_args.game in self.dodgy_offsets:
-                doff_set = self.dodgy_offsets[control.global_args.game]
-                if resource.tell() - 4 - self.block_name_length in doff_set:
-                    logging.warning("Skipping known dodgy room data at offset %s" % resource.tell())
-                    resource.seek(end)
-                    break
+            if self._should_skip_room(resource):
+                logging.warning("Skipping known dodgy room data at offset %s" % resource.tell())
+                resource.seek(end)
+                break
             block = control.block_dispatcher.dispatch_next_block(resource)
             block.load_from_resource(resource, room_start)
             if block.name in self.script_types:
@@ -59,3 +57,10 @@ class BlockRoom(BlockContainer): # also globally indexed
         logging.debug("Saving room: %s" % room_num)
         control.global_index_map.map_index(self.room_offset_name, room_num, location)
         super(BlockRoom, self).save_to_resource(resource, room_start)
+
+    def _should_skip_room(self, resource):
+        if control.global_args.game in self.dodgy_offsets:
+            doff_set = self.dodgy_offsets[control.global_args.game]
+            if resource.tell() - 4 - self.block_name_length in doff_set:
+                return True
+        return False

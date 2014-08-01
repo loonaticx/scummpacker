@@ -1,4 +1,5 @@
 import array
+import logging
 import os
 import struct
 import scummpacker_util as util
@@ -17,6 +18,13 @@ class AbstractBlock(object):
         self._read_header(resource, True)
         #logging.debug("%s loading from room start %s" % (self.name, room_start))
         self._read_data(resource, start, True, room_start)
+
+    def skip_from_resource(self, resource, room_start=0):
+        start = resource.tell()
+        self._read_header(resource, True)
+        end = start + self.size
+        logging.warn('Skipping block "%s" at offset %d' % (self.name, start))
+        resource.seek(end)
 
     def save_to_resource(self, resource, room_start=0):
         self._write_header(resource, True)
