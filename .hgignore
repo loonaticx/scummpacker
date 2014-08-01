@@ -1,0 +1,6 @@
+syntax: glob
+*.pyc
+docs/scummpacker_manual.html
+.idea/
+*.zip
+*.orig
